@@ -1,0 +1,3 @@
+# Copy this file to account.txt. Add one login name per line.
+# Example:
+# your_zingid_account

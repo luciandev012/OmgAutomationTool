@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+account.txt
+credentials.local.json
+login_settings.json
+omg3q_steps.json
+runtime/
+work/
+tests/tmp*/
