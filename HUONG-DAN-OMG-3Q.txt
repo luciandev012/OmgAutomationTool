@@ -27,3 +27,21 @@ NẾU GAME THAY ĐỔI HOẶC KẾT NỐI LỖI
 - Nếu mang mã sang máy khác, cài Python 3.11 và chạy Cai-dat.cmd một lần trước khi mở tool.
 
 Phần Kịch bản nâng cao là công cụ bổ sung cho các tác vụ sẽ làm sau; không cần thiết lập kịch bản để đăng nhập.
+
+PHÓ BẢN CỖ MÁY THỜI GIAN
+
+1. Vào game bằng nhân vật muốn chạy phó bản.
+2. Bấm Tự động vượt phó bản trong mục Cỗ Máy Thời Gian.
+3. Tool tìm sảnh sự kiện, mở Phó Bản, chọn map và ải đang mở qua dấu hai thanh kiếm.
+4. Khi thắng, tool tiếp tục ải sau; khi thua, tool dừng ở màn hình kết quả.
+
+- Dừng sau số ải thắng: nhập 0 để chạy đến khi thua; hoặc nhập số ải muốn giới hạn.
+- Bấm Dừng sau bước hiện tại để ngừng. Tool không bắt đầu trận mới sau yêu cầu dừng.
+- Mỗi map có 10 ải, tối đa 30 sao. Không cần đạt 3 sao mới đi tiếp.
+- Tool tự đóng bảng giới thiệu sự kiện. Nếu game có nút Bỏ qua, tool sử dụng để bỏ hoạt ảnh và lấy kết quả. Không cần bật ô Tự động ải kế trong game.
+- Sau khi thắng, tool chờ bảng thưởng hiện đủ rồi đóng kết quả và chọn ải đang mở. Nếu game tự chuyển màn hình, tool nhận diện lại để tiếp tục.
+- Nếu gặp màn hình chưa nhận diện hoặc chưa xác nhận được ải/map tiếp theo, tool dừng và giữ ảnh ở runtime/dungeon_last_screen.png.
+
+ĐÃ CHẠY THỬ TRỰC TIẾP 18/10/2026: MuMu 1920×1080, map Kinh Châu Ma Trận. Lần kiểm tra cuối thắng 3 trận liên tiếp, tự đi tiếp rồi dừng tại màn hình Bại. Đã kiểm tra cả thắng 1 sao và thắng 3 sao. Chưa kiểm tra trực tiếp chuyển map sau ải thứ 10 vì nhân vật thua trước mốc đó.
+
+MuMu trên máy hiện dùng 4 CPU và RAM 4 GB. Cấu hình 12 GB trước đó gây lỗi Startup failed khi khởi động.

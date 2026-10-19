@@ -18,6 +18,8 @@ from tkinter import messagebox, simpledialog, ttk
 
 from login_engine import (AdbDevice, LoginEngine, PACKAGE, load_accounts,
                           load_common_password, load_options, save_options)
+from dungeon_engine import DungeonDetector, DungeonEngine
+from equipment_skill import EquipmentDetector, TeamEquipmentSkill
 
 
 TITLE = "OMG 3Q · Công cụ thao tác MuMu"
@@ -169,6 +171,7 @@ class App:
         self.accept_terms = tk.BooleanVar(value=options["accept_terms"])
         self.enter_game = tk.BooleanVar(value=options["enter_game"])
         self.prefer_played = tk.BooleanVar(value=options["prefer_played_server"])
+        self.dungeon_limit = tk.StringVar(value="0")
         self.accounts = []
         self.account_count = tk.StringVar()
         self.status = tk.StringVar(value="Chọn tài khoản trong account.txt rồi bấm Đăng nhập.")
@@ -208,6 +211,20 @@ class App:
         ttk.Checkbutton(credential, text="Ưu tiên server đã chơi", variable=self.prefer_played).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
         ttk.Checkbutton(credential, text="Vào game sau xác thực", variable=self.enter_game).grid(row=1, column=2, columnspan=2, sticky="w", pady=(8, 0))
         ttk.Checkbutton(credential, text="Cho phép tích ô đồng ý điều khoản game", variable=self.accept_terms).grid(row=1, column=4, columnspan=2, sticky="w", pady=(8, 0))
+
+        dungeon = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Phó Bản", padding=8)
+        dungeon.pack(fill="x", padx=10, pady=(8, 0))
+        self.dungeon_button = ttk.Button(dungeon, text="Tự động vượt phó bản", command=self.run_dungeon)
+        self.dungeon_button.pack(side="left")
+        ttk.Label(dungeon, text="Dừng sau số ải thắng:").pack(side="left", padx=(16, 5))
+        ttk.Spinbox(dungeon, from_=0, to=999, width=5, textvariable=self.dungeon_limit).pack(side="left")
+        ttk.Label(dungeon, text="0 = chạy đến khi thua · Dùng phiên game đang mở").pack(side="left", padx=12)
+
+        equipment = ttk.Frame(self.root, padding=(10, 8, 10, 0))
+        equipment.pack(fill="x")
+        self.equipment_button = ttk.Button(equipment, text="Trang bị + Cường hóa toàn đội", command=self.run_equipment)
+        self.equipment_button.pack(side="left")
+        ttk.Label(equipment, text="Cỗ Máy Thời Gian · Tối đa 6 tướng · Lưu kết quả từng tướng").pack(side="left", padx=12)
 
         body = ttk.Frame(self.root, padding=10)
         body.pack(fill="both", expand=True)
@@ -309,11 +326,79 @@ class App:
             messagebox.showwarning("Đăng nhập đã dừng", result.message +
                                    (f"\nẢnh chẩn đoán: {result.screenshot}" if result.screenshot else ""))
 
+    def run_dungeon(self) -> None:
+        if self.busy:
+            self.status.set("Đang thực hiện một thao tác khác.")
+            return
+        if not DungeonDetector().results_ready:
+            messagebox.showinfo("Phó bản · thiếu tệp nhận diện", "Bộ ảnh nhận diện phó bản chưa đầy đủ. Hãy khôi phục thư mục assets/dungeon từ bản tool đầy đủ rồi mở lại.")
+            return
+        try:
+            limit = int(self.dungeon_limit.get())
+            if limit < 0:
+                raise ValueError()
+        except ValueError:
+            messagebox.showinfo("Phó bản", "Số ải thắng phải là số nguyên từ 0 trở lên. Nhập 0 để chạy đến khi thua.")
+            return
+        serial = self.serial.get().strip()
+        package = self.package.get().strip() or PACKAGE
+        self.stop_event.clear()
+
+        def work():
+            connect(self.adb, serial)
+            if foreground_package(self.adb, serial) != package:
+                raise AdbError("Hãy mở OMG 3Q và vào nhân vật muốn chạy phó bản trước.")
+            device = AdbDevice(self.adb, serial, run_adb, input_text, package)
+            engine = DungeonEngine(device, stop=self.stop_event,
+                                   progress=lambda text: self.events.put(("progress", text, None)),
+                                   preview=lambda png: self.events.put(("frame", png, None)))
+            return engine.run(max_wins=limit)
+
+        self._worker(work, self._dungeon_complete)
+
+    def _dungeon_complete(self, result) -> None:
+        self.last_dungeon_result = result
+        self.status.set(result.message)
+        if result.status in {"error", "unknown", "timeout", "needs_samples", "existing_result"}:
+            messagebox.showwarning("Phó bản đã dừng", result.message +
+                                   (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
+
     def _set_busy(self, value: bool, message: str | None = None) -> None:
         self.busy = value
         self.account_combo.configure(state="disabled" if value else "readonly")
+        self.dungeon_button.configure(state="disabled" if value else "normal")
+        self.equipment_button.configure(state="disabled" if value else "normal")
         if message:
             self.status.set(message)
+
+    def run_equipment(self) -> None:
+        if self.busy:
+            self.status.set("Đang thực hiện một thao tác khác.")
+            return
+        if not EquipmentDetector().ready:
+            messagebox.showinfo("Trang bị", "Thiếu bộ ảnh assets/equipment. Hãy khôi phục bộ tool đầy đủ.")
+            return
+        serial, package = self.serial.get().strip(), self.package.get().strip() or PACKAGE
+        self.stop_event.clear()
+
+        def work():
+            connect(self.adb, serial)
+            if foreground_package(self.adb, serial) != package:
+                raise AdbError("Hãy mở OMG 3Q và vào sảnh Cỗ Máy Thời Gian hoặc Đội Hình trước.")
+            device = AdbDevice(self.adb, serial, run_adb, input_text, package)
+            skill = TeamEquipmentSkill(device, stop=self.stop_event,
+                                   progress=lambda text: self.events.put(("progress", text, None)),
+                                   preview=lambda png: self.events.put(("frame", png, None)))
+            return skill.run()
+
+        self._worker(work, self._equipment_complete)
+
+    def _equipment_complete(self, result) -> None:
+        self.last_equipment_result = result
+        self.status.set(result.message)
+        if result.status in {"error", "blocked", "needs_samples"}:
+            messagebox.showwarning("Skill trang bị đã dừng", result.message +
+                                   (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
 
     def _worker(self, func, done=None) -> None:
         if self.busy:

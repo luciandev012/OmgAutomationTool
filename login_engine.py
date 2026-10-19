@@ -203,6 +203,13 @@ class AdbDevice:
         self.run("shell", "input", "tap", str(round(x * width / SIZE[0])),
                  str(round(y * height / SIZE[1])))
 
+    def swipe(self, x1: int, y1: int, x2: int, y2: int,
+              frame_size: tuple[int, int], duration: int = 450) -> None:
+        width, height = frame_size
+        self.run("shell", "input", "swipe", str(round(x1 * width / SIZE[0])),
+                 str(round(y1 * height / SIZE[1])), str(round(x2 * width / SIZE[0])),
+                 str(round(y2 * height / SIZE[1])), str(duration))
+
     def replace_text(self, value: str) -> None:
         if not value or len(value) > 128 or any(ord(c) < 32 or ord(c) > 126 for c in value) or "%s" in value:
             raise ValueError("Tài khoản/mật khẩu phải dài 1–128 ký tự ASCII, không chứa chuỗi '%s'.")
