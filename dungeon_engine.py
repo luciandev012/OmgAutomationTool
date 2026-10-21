@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -147,8 +148,9 @@ class DungeonEngine:
         screenshot = ""
         if self.last_png:
             try:
-                folder = ROOT / "runtime"
-                folder.mkdir(exist_ok=True)
+                serial = str(getattr(self.device, "serial", "default"))
+                folder = ROOT / "runtime" / re.sub(r"[^\w.-]", "_", serial)
+                folder.mkdir(parents=True, exist_ok=True)
                 path = folder / "dungeon_last_screen.png"
                 path.write_bytes(self.last_png)
                 screenshot = str(path)

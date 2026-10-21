@@ -1,14 +1,102 @@
 # OMG Automation Tool
 
-Ứng dụng Windows điều khiển OMG 3Q trên MuMu Player 12 qua ADB.
+Ứng dụng Windows điều khiển OMG 3Q trên MuMuPlayer / LDPlayer qua ADB.
 
 Mở `Mo-tool-OMG-3Q.cmd`; xem `HUONG-DAN-OMG-3Q.txt` để sử dụng.
 Trên máy mới, cài Python 3.11 rồi chạy `Cai-dat.cmd`.
 
-Sau khi tải mã từ Git, chép `account.example.txt` thành `account.txt` và điền tài khoản,
-mỗi dòng một tên. Chép `credentials.example.json` thành `credentials.local.json`
-rồi điền mật khẩu chung trên máy của bạn. Có thể chép `login_settings.example.json`
-thành `login_settings.json` để thiết lập các lựa chọn; mặc định chưa cho phép tích ô điều khoản.
+## Phiên bản giả lập và cấu hình test
+
+Thông tin kiểm tra trên máy phát triển ngày **21/10/2026**. Phiên bản ứng dụng
+giả lập được đọc từ bản cài trên Windows; MuMuPlayer 6.8.5.0 bên dưới đang dùng
+instance **Android 12** (số phiên bản ứng dụng và phiên bản Android là hai thông tin riêng).
+
+| Giả lập đang cài | Phiên bản | Link tải chính thức |
+| --- | --- | --- |
+| LDPlayer 9 | **9.5.41.0** | [Tải LDPlayer 9 cho Windows](https://res.ldrescdn.com/download/package/LDPlayer9.0.exe?n=LDPlayer9.0_ens_1001_ld.exe) · [Lịch sử phiên bản](https://www.ldplayer.net/other/version-history-and-release-notes.html) |
+| MuMuPlayer | **6.8.5.0** | [Tải MuMuPlayer cho Windows](https://www.mumuplayer.com/download/) |
+
+Các link trên là nguồn tải chính thức của hãng, có thể cung cấp bản mới hơn theo
+thời điểm tải. Chưa xác minh được link bộ cài cố định đúng build **9.5.41.0** và
+**6.8.5.0**; kiểm tra lại phiên bản sau khi cài nếu cần tái lập môi trường test.
+
+**Thiết lập instance hiện tại:** đọc từ cấu hình của instance 0 và 1 của mỗi loại;
+đây là giá trị cấu hình, chưa phải kết quả đo hiệu năng hay số máy chạy ổn định.
+
+| Thiết lập mỗi instance | MuMuPlayer (Android 12) | LDPlayer 9 |
+| --- | --- | --- |
+| CPU cấp cho giả lập | 2 vCPU | 4 vCPU |
+| RAM cấp cho giả lập | 4 GB | 4096 MB |
+| Độ phân giải | 1920 × 1080 (16:9) | 1920 × 1080 (16:9) |
+| DPI | 280 | 280 |
+| FPS trong cấu hình | `fps_limit=30`, `fps_limit_low=15`, `fps_limit_real=60` | 60 |
+
+Bộ ảnh nhận diện hiện được kiểm tra ở **1920 × 1080**. Cần kiểm thử lại khi đổi
+độ phân giải hoặc phiên bản giả lập.
+
+## Chọn và điều khiển instance MuMu / LDPlayer
+
+Tool tự phát hiện giả lập được cài đặt. Nếu có một loại, tool tự chọn loại đó;
+nếu có cả hai, chọn MuMu hoặc LDPlayer ở thanh trên rồi bấm Mở.
+Có thể đặt `OMG_MUMU_MANAGER` hoặc `OMG_LDMULTIPLAYER` nếu cài ở đường dẫn riêng.
+
+Hộp thoại hiển thị tên instance trong Multi, bao gồm máy đang tắt.
+Tích chọn số lượng tùy ý rồi bấm **Khởi động**: mỗi instance có luồng mở riêng,
+khởi động đồng thời, chờ Android và tự mở OMG 3Q. Không tự đăng nhập tài khoản.
+Mỗi dòng hiển thị tiến độ / lỗi riêng. Một máy lỗi không dừng các máy khác.
+
+**Dấu tích tự xóa ngay sau khi nhận mỗi lệnh**. Việc bỏ tích không hủy tác vụ đã gửi.
+Ví dụ: tích A+B → Khởi động; tích lại A → Tạm dừng, B vẫn chạy;
+tích lại A → Tiếp tục. Chọn tất cả / Bỏ chọn tất cả giúp chọn nhanh.
+Làm mới nạp lại danh sách và bỏ các dấu tích, không làm mất tác vụ đang chạy.
+
+- **Tạm dừng**: chặn các thao tác tiếp theo của tool trên các máy được tích,
+  kể cả tác vụ đăng nhập / phó bản / trang bị / kịch bản sau khi mở game.
+- **Tiếp tục**: cho các máy được tích tiếp tục tác vụ đang tạm dừng.
+- **Dừng tác vụ**: hủy tác vụ trên các máy được tích; không tắt game hay giả lập.
+  Muốn chạy lại cần chủ động gửi lệnh mới. Tiếp tục không khôi phục tác vụ đã hủy.
+- Lệnh ADB đã gửi có thể hoàn tất trước khi tạm dừng / dừng có hiệu lực.
+- **Đóng**: đóng hộp thoại; tác vụ và trạng thái điều khiển vẫn thuộc tool.
+  Mở lại hộp thoại để điều khiển tiếp. Thoát toàn bộ tool sẽ yêu cầu dừng mọi tác vụ.
+
+Ở cửa sổ chính, chọn **Thao tác trên** theo tên máy đã kết nối trước khi chạy
+đăng nhập, phó bản, trang bị hoặc kịch bản. Có thể bắt đầu tác vụ trên A rồi chuyển
+sang B để chạy tác vụ khác. Mỗi máy chỉ nhận một tác vụ tại một thời điểm;
+đổi máy trên giao diện không đổi đích ADB của tác vụ đã chạy. Các thao tác chính
+áp dụng cho máy ở ô Thao tác trên; checkbox trong hộp thoại dùng để gửi lệnh điều khiển.
+
+IP/ID chỉ dùng nội bộ cho ADB. Các instance dùng cờ dừng,
+trạng thái tạm dừng, đồng hồ và thư mục ảnh chẩn đoán riêng.
+Không thay ADB của giả lập hoặc tắt tất cả instance khi dừng một tác vụ.
+
+## Tài khoản Excel và Script A / B / C
+
+Thông tin đăng nhập lấy hoàn toàn từ `account.xlsx`, không dùng danh sách TXT
+hay ô mật khẩu chung. Đóng Excel trước khi chạy để tool có thể lưu tệp.
+Cấu trúc: `STT | TK | MK | Status | 1 … 15 | Hoàn Thành`;
+dòng ngay dưới tài khoản cuối là `Tổng đã hoàn thành`.
+
+Mở và kết nối các instance, chọn tệp rồi bấm một trong ba nút:
+
+- **Script A**: tài khoản chưa hoàn thành ngày 1; thành công ghi `1` ở ngày 1.
+- **Script B**: tổng Hoàn Thành từ 1 đến 14, các ngày đã xong liên tiếp;
+  thành công ghi `1` ở ngày tiếp theo. Mỗi tài khoản chỉ chạy một ngày trong một lượt.
+- **Script C**: tổng Hoàn Thành ít nhất 2; không thay đổi các cột ngày.
+
+Ba nút hiện dùng cùng chu trình thử, chưa triển khai nhiệm vụ riêng từng ngày:
+đăng nhập → vào sảnh Cỗ Máy Thời Gian → đóng/mở game → xác nhận thông báo.
+Chỉ sau khi thấy thông báo, tool mới lưu Status `v` và số `1` của A/B,
+trước khi đóng thông báo để đăng nhập tài khoản kế tiếp.
+Chu trình đóng/mở là dấu hiệu hoàn thành của bài thử, không phải xóa phiên ZingID;
+bước Đổi Tài Khoản ở lượt tiếp theo vẫn phải xác thực tài khoản Excel mới.
+
+Các instance lấy hàng từ trên xuống, bỏ qua Status không trống, lưu `x` trước
+khi đăng nhập. Một bộ ghi Excel chung giữ việc nhận hàng và lưu kết quả tuần tự.
+Hoàn Thành và dòng tổng được cập nhật cả công thức lẫn giá trị tính sẵn.
+Status `x`/`v` chỉ được xóa với các hàng thuộc instance đã xác nhận tắt.
+Hàng đã nhận không bị lấy lại trong cùng lượt, kể cả khi Status đã được xóa.
+Hết tài khoản thì tự tắt instance; tất cả tắt thành công sẽ báo `Đã xong`.
+Nếu gặp lỗi, giữ nguyên hàng chưa hoàn thành và báo lỗi, không ghi thành công giả.
 
 ## Luồng đăng nhập
 

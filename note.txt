@@ -1,0 +1,59 @@
+GHI CHÚ PHIÊN BẢN ĐANG PHÁT TRIỂN
+Ngày: 21/10/2026
+Branch: Automation_Daily
+
+Phạm vi
+- Lưu trạng thái mã nguồn hiện tại để tiếp tục phát triển và review.
+- Các thay đổi dưới đây được tổng hợp so với commit 1a2d6fd.
+
+Những phần đã triển khai
+1. Quản lý MuMuPlayer và LDPlayer:
+   - Phát hiện giả lập, liệt kê instance đang chạy và đang tắt.
+   - Chọn nhiều instance, khởi động đồng thời, chờ Android rồi mở game.
+   - Hiển thị tiến độ và lỗi riêng; tạm dừng, tiếp tục, dừng theo instance.
+   - Bỏ dấu tích sau khi nhận lệnh; mở lại hộp thoại vẫn giữ phiên điều khiển.
+2. Tách tác vụ theo thiết bị:
+   - Mỗi instance có đích ADB, cờ dừng, trạng thái tạm dừng và đồng hồ riêng.
+   - Mỗi thiết bị chỉ nhận một tác vụ tại một thời điểm.
+   - Đổi thiết bị trên giao diện không đổi đích của tác vụ đang chạy.
+   - Ảnh chẩn đoán đăng nhập và phó bản được lưu riêng theo thiết bị.
+3. Tài khoản Excel và Script A/B/C:
+   - Giao diện lấy tài khoản và mật khẩu từ account.xlsx, thay luồng TXT/mật khẩu chung.
+   - Phân hàng cho nhiều instance qua bộ ghi chung, tránh nhận trùng trong cùng lượt.
+   - Lưu Status x trước khi làm; lưu v và ngày hoàn thành khi đủ điều kiện.
+   - Cập nhật tổng Hoàn Thành và dòng tổng, gồm công thức và giá trị tính sẵn.
+   - Script A chọn ngày 1 chưa xong; B chọn ngày tiếp theo của chuỗi liên tiếp;
+     C chọn tài khoản có tổng hoàn thành ít nhất 2 và không ghi cột ngày.
+   - Hết tài khoản thì tắt instance; chỉ xóa trạng thái hàng sau khi xác nhận tắt.
+   - Giữ hàng chưa hoàn thành khi lỗi; xử lý lỗi lưu và tương thích namespace Excel.
+4. Đăng nhập và quan sát màn hình:
+   - Điều chỉnh luồng đổi tài khoản, giảm khởi động lại game trong bước xác thực.
+   - Dùng bộ chụp màn hình chung để đóng thông báo nhận diện được và lấy ảnh mới.
+   - Giữ kiểm tra tài khoản đã xác thực trước khi báo đăng nhập thành công.
+5. Tài liệu và kiểm thử:
+   - README mô tả quản lý instance, tài khoản Excel và chu trình Script A/B/C.
+   - Ghi phiên bản đang cài: LDPlayer 9.5.41.0 và MuMuPlayer 6.8.5.0.
+   - Thêm link tải chính thức và cấu hình từng giả lập: CPU, RAM, độ phân giải, DPI, FPS.
+   - Link tải của hãng có thể trả bản mới hơn; chưa xác minh link cố định đúng build.
+   - Bổ sung kiểm thử cho Excel, instance, phiên tác vụ và quan sát màn hình.
+   - Loại account.xlsx và file Excel tạm khỏi Git; dữ liệu tài khoản ở lại máy.
+
+Những phần chưa hoàn thiện / cần kiểm chứng
+- Script A/B/C hiện dùng chung chu trình thử: đăng nhập, vào sảnh Cỗ Máy Thời Gian,
+  đóng/mở game, xác nhận thông báo. Chưa triển khai nhiệm vụ riêng từng ngày.
+- Skill trang bị chưa tự được gọi khi thua phó bản để nâng cấp rồi đánh lại.
+- Cần kiểm chứng toàn luồng nhiều tài khoản trên nhiều instance trong game thật,
+  gồm đổi tài khoản, ghi Excel, tạm dừng/dừng, lỗi kết nối và tắt instance.
+- README còn ghi chuyển map sau ải thứ 10 chưa được kiểm tra trực tiếp.
+- Cần kiểm chứng nhận diện khi thay đổi độ phân giải hoặc phiên bản giả lập.
+- Mục tệp riêng trong README còn nhắc luồng TXT/mật khẩu chung cũ, cần thống nhất lại.
+
+Kiểm tra
+- Lệnh: .\.venv\Scripts\python.exe -B -m unittest discover -s tests
+- Kết quả đã xác nhận ngày 21/10/2026: 106 test đạt.
+- Đây là kiểm thử tự động; không xác nhận mọi luồng đã chạy ổn định trong game thật.
+
+Ghi chú merge
+- Commit và push bản này lên branch phát triển; chưa merge vào branch đích.
+- Merge kết hợp thay đổi từ điểm chung của hai branch, có thể thay thế hành vi cũ.
+- Những đoạn cùng bị sửa ở hai branch có thể cần giải quyết conflict khi merge.
