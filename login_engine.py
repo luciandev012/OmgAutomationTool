@@ -11,6 +11,7 @@ from typing import Callable
 
 import cv2
 import numpy as np
+from screen_observer import capture_screen
 
 ROOT = Path(__file__).resolve().parent
 ACCOUNT_FILE = ROOT / "account.txt"
@@ -196,7 +197,7 @@ class AdbDevice:
             raise ValueError("OMG 3Q chưa được cài trong thiết bị này.")
 
     def capture(self) -> bytes:
-        return self.run("exec-out", "screencap", "-p", timeout=20)
+        return capture_screen(self.adb, self.serial, self.runner)
 
     def tap(self, x: int, y: int, frame_size: tuple[int, int]) -> None:
         width, height = frame_size
@@ -290,8 +291,9 @@ class LoginEngine:
                     x, y = form.center
                     frame[max(0, y + 30):min(SIZE[1], y + 220),
                           max(0, x - 300):min(SIZE[0], x + 300)] = (28, 28, 28)
-                folder = ROOT / "runtime"
-                folder.mkdir(exist_ok=True)
+                serial = str(getattr(self.device, "serial", "default"))
+                folder = ROOT / "runtime" / re.sub(r"[^\w.-]", "_", serial)
+                folder.mkdir(parents=True, exist_ok=True)
                 output = folder / "login_last_screen.png"
                 output.write_bytes(cv2.imencode(".png", frame)[1].tobytes())
                 path = str(output)
@@ -303,13 +305,11 @@ class LoginEngine:
 
     def run(self, username: str, password: str, *, accept_terms: bool = False,
             enter_game: bool = True, prefer_played_server: bool = True,
-            reset: bool = True) -> LoginResult:
+            reset: bool = False) -> LoginResult:
         submitted = False
         submitted_at = 0.0
         switched = False
         switch_at = 0.0
-        auth_requested = False
-        post_auth_restart = False
         terms_tap_at = None
         server_chosen = not prefer_played_server
         empty_server_at = None
@@ -325,8 +325,7 @@ class LoginEngine:
             if len(username) > 128 or len(password) > 128:
                 raise ValueError("Tài khoản/mật khẩu vượt giới hạn 128 ký tự.")
             self.progress("Đang mở OMG 3Q…")
-            if reset:
-                self.device.launch(reset=True)
+            self.device.launch(reset=reset)
             while self.clock() - start < self.timeout:
                 frame = self._observe()
                 find = lambda name, threshold=.92: self.detector.find(frame, name, threshold)
@@ -348,7 +347,7 @@ class LoginEngine:
                     self.progress("Đóng thông báo khởi động…")
                     self._tap(notice)
                     if not submitted:
-                        switched, auth_requested = False, False
+                        switched = False
                         terms_tap_at = None
                     self._wait()
                     continue
@@ -369,23 +368,6 @@ class LoginEngine:
                         return self._finish("failed", "Game chưa xác thực được tài khoản. Kiểm tra thông báo trong giả lập.", True)
                     self._wait()
                     continue
-                # Opening ZingID with "Vào Game" can auto-enter the last selected
-                # server after authentication. Reopen the title once so server history
-                # belongs to the newly authenticated account before selecting a role.
-                if submitted and auth_requested and not post_auth_restart:
-                    authenticated_screen = (find("start_game", .94) or find("lobby_status")
-                                            or find("lobby_announcement") or find("promo_dismiss", .90))
-                    if authenticated_screen:
-                        if self.clock() - submitted_at < 2:
-                            self._wait()
-                            continue
-                        self.progress("Xác thực xong; mở lại màn hình chọn server của tài khoản…")
-                        self.device.launch(reset=True)
-                        post_auth_restart = True
-                        terms_tap_at = None
-                        ready_after = self.clock() + self.startup_delay
-                        self._wait(2)
-                        continue
                 if find("server_panel", .94):
                     if not submitted:
                         return self._finish("unknown", "Chưa xác thực tài khoản được chọn; đã dừng.", True)
@@ -419,22 +401,6 @@ class LoginEngine:
                             switched, switch_at = True, self.clock()
                         elif self.clock() - switch_at > 18:
                             return self._finish("unknown", "Không mở được biểu mẫu Đổi Tài Khoản.", True)
-                        elif not auth_requested and self.clock() - switch_at > 1:
-                            terms = find("terms_label", .90)
-                            if terms is None:
-                                return self._finish("unknown", "Không nhận diện được điều khoản trước bước mở ZingID.", True)
-                            if not self.detector.terms_checked(frame, terms):
-                                if not accept_terms:
-                                    return self._finish("needs_terms", "Cần cho phép tích ô điều khoản để mở biểu mẫu ZingID.")
-                                if terms_tap_at is None:
-                                    self._tap(terms, dx=-168)
-                                    terms_tap_at = self.clock()
-                                elif self.clock() - terms_tap_at > 3:
-                                    return self._finish("unknown", "Ô điều khoản chưa được bật; đã dừng để tránh bấm nhầm.", True)
-                            else:
-                                self.progress("Mở biểu mẫu xác thực tài khoản…")
-                                self._tap(start_button)
-                                auth_requested = True
                         self._wait()
                         continue
                     if not enter_game:
