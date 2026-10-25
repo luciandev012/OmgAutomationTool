@@ -32,6 +32,22 @@ class ScreenObserverTests(unittest.TestCase):
         self.assertEqual(AdbDevice('adb', 'B', runner, None).capture(), clear)
         self.assertEqual(runner.call_count, 1)
 
+    def test_script_device_reports_dismissal_and_obeys_stop_before_tap(self):
+        popup, clear = frame(True), frame()
+        progress, checkpoint = Mock(), Mock()
+        runner = Mock(side_effect=[popup, b'', clear])
+        device = AdbDevice('adb', 'B', runner, None, capture_options={
+            'progress': progress, 'checkpoint': checkpoint, 'sleeper': lambda _: None})
+        self.assertEqual(device.capture(), clear)
+        progress.assert_called_once()
+        checkpoint.assert_has_calls([unittest.mock.call()] * 3)
+        runner.reset_mock(side_effect=True)
+        runner.return_value = popup
+        checkpoint.side_effect = [None, InterruptedError()]
+        with self.assertRaises(InterruptedError):
+            device.capture()
+        self.assertFalse(any('tap' in c.args for c in runner.call_args_list))
+
     def test_persistent_hint_stops_instead_of_returning_stale_frame(self):
         runner = Mock(return_value=frame(True))
         with self.assertRaisesRegex(ValueError, 'chưa đóng'):

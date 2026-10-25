@@ -180,9 +180,10 @@ class Detector:
 
 class AdbDevice:
     def __init__(self, adb: str, serial: str, runner: Callable, writer: Callable,
-                 package: str = PACKAGE):
+                 package: str = PACKAGE, *, capture_options=None):
         self.adb, self.serial = adb, serial
         self.runner, self.writer, self.package = runner, writer, package
+        self.capture_options = capture_options or {}
 
     def run(self, *args: str, **kwargs) -> bytes:
         return self.runner(self.adb, "-s", self.serial, *args, **kwargs)
@@ -197,7 +198,7 @@ class AdbDevice:
             raise ValueError("OMG 3Q chưa được cài trong thiết bị này.")
 
     def capture(self) -> bytes:
-        return capture_screen(self.adb, self.serial, self.runner)
+        return capture_screen(self.adb, self.serial, self.runner, **self.capture_options)
 
     def tap(self, x: int, y: int, frame_size: tuple[int, int]) -> None:
         width, height = frame_size

@@ -33,8 +33,10 @@ def has_dismiss_hint(png):
     return bool(score >= .92 and gray[y:y+h, x:x+w].mean() >= template.mean() * .78)
 
 
-def capture_screen(adb, serial, runner, *, sleeper=time.sleep, max_dismissals=5):
+def capture_screen(adb, serial, runner, *, sleeper=time.sleep, max_dismissals=5,
+                   checkpoint=lambda: None, progress=lambda message: None):
     for attempt in range(max_dismissals + 1):
+        checkpoint()
         png = runner(adb, '-s', serial, 'exec-out', 'screencap', '-p', timeout=30)
         if not has_dismiss_hint(png):
             return png
@@ -42,5 +44,7 @@ def capture_screen(adb, serial, runner, *, sleeper=time.sleep, max_dismissals=5)
             raise ValueError('Bảng có hướng dẫn nhấn vùng trống chưa đóng sau khi bấm giữa màn hình.')
         image = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
         height, width = image.shape[:2]
+        checkpoint()
+        progress('Đóng bảng hướng dẫn: nhấp giữa màn hình để tắt…')
         runner(adb, '-s', serial, 'shell', 'input', 'tap', str(width // 2), str(height // 2))
         sleeper(.5)

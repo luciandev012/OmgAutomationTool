@@ -13,7 +13,11 @@ from task_sessions import active_session
 class ExcelCycle:
     def __init__(self, session, runner, writer, package, progress):
         self.session, self.control = session, session.control
-        self.device = AdbDevice(*session.connection, runner, writer, package)
+        # A/B/C share this device throughout login, event entry and restart.
+        # Every observation closes the blank-area hint before processing a step.
+        self.device = AdbDevice(*session.connection, runner, writer, package,
+            capture_options={'checkpoint': self.control.checkpoint,
+                             'sleeper': self.control.sleep, 'progress': progress})
         self.progress = progress
 
     def run(self, account):
