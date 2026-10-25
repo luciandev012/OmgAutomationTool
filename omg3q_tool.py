@@ -20,6 +20,11 @@ from login_engine import (AdbDevice, LoginEngine, PACKAGE, load_accounts,
                           load_common_password, load_options, save_options)
 from dungeon_engine import DungeonDetector, DungeonEngine
 from equipment_skill import EquipmentDetector, TeamEquipmentSkill
+from advance_skill import AdvanceDetector, AdvanceSkill, TeamAdvanceSkill
+from level_skill import LevelDetector, LevelSkill, TeamLevelSkill
+from treasure_skill import TreasureDetector, TreasureSkill, TeamTreasureSkill
+from evolution_skill import EvolutionDetector, EvolutionSkill, TeamEvolutionSkill, KINDS
+from chest_skill import ChestDetector, ChestSkill
 
 
 TITLE = "OMG 3Q · Công cụ thao tác MuMu"
@@ -156,7 +161,7 @@ class App:
     def __init__(self, root: tk.Tk):
         self.root = root
         root.title(TITLE)
-        root.geometry("1230x850")
+        root.geometry(f"1230x{max(700,min(980,root.winfo_screenheight()-100))}")
         root.minsize(1020, 700)
         self.events: queue.Queue = queue.Queue()
         self.busy = False
@@ -172,6 +177,22 @@ class App:
         self.enter_game = tk.BooleanVar(value=options["enter_game"])
         self.prefer_played = tk.BooleanVar(value=options["prefer_played_server"])
         self.dungeon_limit = tk.StringVar(value="0")
+        self.dungeon_spam = tk.BooleanVar(value=False)
+        self.dungeon_spam_limit = tk.StringVar(value="100")
+        self.advance_scope = tk.StringVar(value="Tướng đang chọn")
+        self.advance_mode = tk.StringVar(value="Tự dừng khi không thể")
+        self.advance_target = tk.StringVar(value="10")
+        self.level_scope = tk.StringVar(value="Tướng đang chọn")
+        self.level_mode = tk.StringVar(value="Tự dừng khi không thể")
+        self.level_target = tk.StringVar(value="100")
+        self.treasure_scope = tk.StringVar(value="Tướng đang chọn")
+        self.treasure_mode = tk.StringVar(value="Tự dừng khi không thể")
+        self.treasure_target = tk.StringVar(value="10")
+        self.evolution = {kind: {
+            "scope": tk.StringVar(value="Tướng đang chọn"),
+            "mode": tk.StringVar(value="Tự dừng khi không thể"),
+            "target": tk.StringVar(value="1"), "lv": tk.StringVar(value="0")}
+            for kind in KINDS}
         self.accounts = []
         self.account_count = tk.StringVar()
         self.status = tk.StringVar(value="Chọn tài khoản trong account.txt rồi bấm Đăng nhập.")
@@ -214,17 +235,110 @@ class App:
 
         dungeon = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Phó Bản", padding=8)
         dungeon.pack(fill="x", padx=10, pady=(8, 0))
-        self.dungeon_button = ttk.Button(dungeon, text="Tự động vượt phó bản", command=self.run_dungeon)
+        dungeon_row = ttk.Frame(dungeon)
+        dungeon_row.pack(fill="x")
+        self.dungeon_button = ttk.Button(dungeon_row, text="Tự động vượt phó bản", command=self.run_dungeon)
         self.dungeon_button.pack(side="left")
-        ttk.Label(dungeon, text="Dừng sau số ải thắng:").pack(side="left", padx=(16, 5))
-        ttk.Spinbox(dungeon, from_=0, to=999, width=5, textvariable=self.dungeon_limit).pack(side="left")
-        ttk.Label(dungeon, text="0 = chạy đến khi thua · Dùng phiên game đang mở").pack(side="left", padx=12)
+        ttk.Label(dungeon_row, text="Dừng sau số ải thắng:").pack(side="left", padx=(16, 5))
+        self.dungeon_limit_entry = ttk.Spinbox(dungeon_row, from_=0, to=999, width=5, textvariable=self.dungeon_limit)
+        self.dungeon_limit_entry.pack(side="left")
+        self.dungeon_spam_check = ttk.Checkbutton(dungeon_row, text="Spam khi thua",
+            variable=self.dungeon_spam, command=self._dungeon_controls)
+        self.dungeon_spam_check.pack(side="left", padx=(16, 5))
+        ttk.Label(dungeon_row, text="Số lần/ải:").pack(side="left", padx=(5, 5))
+        self.dungeon_spam_entry = ttk.Spinbox(dungeon_row, from_=1, to=9999, width=6,
+            textvariable=self.dungeon_spam_limit)
+        self.dungeon_spam_entry.pack(side="left")
+        ttk.Label(dungeon, text="0 = không giới hạn ải thắng · Spam tính các trận đánh lại, đặt lại khi thắng · Hết lượt sẽ hỏi chạy lượt mới").pack(anchor="w", pady=(4, 0))
+        self._dungeon_controls()
 
         equipment = ttk.Frame(self.root, padding=(10, 8, 10, 0))
         equipment.pack(fill="x")
         self.equipment_button = ttk.Button(equipment, text="Trang bị + Cường hóa toàn đội", command=self.run_equipment)
         self.equipment_button.pack(side="left")
         ttk.Label(equipment, text="Cỗ Máy Thời Gian · Tối đa 6 tướng · Lưu kết quả từng tướng").pack(side="left", padx=12)
+
+        advance = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Tiến cấp tướng", padding=8)
+        advance.pack(fill="x", padx=10, pady=(8, 0))
+        self.advance_button = ttk.Button(advance, text="Tiến cấp tướng", command=self.run_advance)
+        self.advance_button.pack(side="left")
+        self.advance_scope_combo = ttk.Combobox(advance, textvariable=self.advance_scope, state="readonly",
+            values=("Tướng đang chọn", "Toàn đội tối đa 6 tướng"), width=24)
+        self.advance_scope_combo.pack(side="left", padx=8)
+        self.advance_mode_combo = ttk.Combobox(advance, textvariable=self.advance_mode, state="readonly",
+            values=("Tự dừng khi không thể", "Dừng ở bậc mục tiêu"), width=24)
+        self.advance_mode_combo.pack(side="left", padx=4)
+        self.advance_mode_combo.bind("<<ComboboxSelected>>", lambda event: self._advance_controls())
+        ttk.Label(advance, text="Bậc +").pack(side="left", padx=(8, 3))
+        self.advance_target_entry = ttk.Entry(advance, textvariable=self.advance_target, width=5)
+        self.advance_target_entry.pack(side="left")
+        self._advance_controls()
+
+        level = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Tăng cấp tướng", padding=8)
+        level.pack(fill="x", padx=10, pady=(8, 0))
+        self.level_button = ttk.Button(level, text="Tăng cấp tướng", command=self.run_level)
+        self.level_button.pack(side="left")
+        self.level_scope_combo = ttk.Combobox(level, textvariable=self.level_scope, state="readonly",
+            values=("Tướng đang chọn", "Toàn đội tối đa 6 tướng"), width=24)
+        self.level_scope_combo.pack(side="left", padx=8)
+        self.level_mode_combo = ttk.Combobox(level, textvariable=self.level_mode, state="readonly",
+            values=("Tự dừng khi không thể", "Dừng ở cấp mục tiêu"), width=24)
+        self.level_mode_combo.pack(side="left", padx=4)
+        self.level_mode_combo.bind("<<ComboboxSelected>>", lambda event: self._level_controls())
+        ttk.Label(level, text="Cấp").pack(side="left", padx=(8, 3))
+        self.level_target_entry = ttk.Entry(level, textvariable=self.level_target, width=5)
+        self.level_target_entry.pack(side="left")
+        self._level_controls()
+
+        treasure = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Cường hóa bảo vật", padding=8)
+        treasure.pack(fill="x", padx=10, pady=(8, 0))
+        self.treasure_button = ttk.Button(treasure, text="Cường hóa bảo vật", command=self.run_treasure)
+        self.treasure_button.pack(side="left")
+        self.treasure_scope_combo = ttk.Combobox(treasure, textvariable=self.treasure_scope, state="readonly",
+            values=("Tướng đang chọn", "Toàn đội tối đa 6 tướng"), width=24)
+        self.treasure_scope_combo.pack(side="left", padx=8)
+        self.treasure_mode_combo = ttk.Combobox(treasure, textvariable=self.treasure_mode, state="readonly",
+            values=("Tự dừng khi không thể", "Dừng ở bậc mục tiêu"), width=24)
+        self.treasure_mode_combo.pack(side="left", padx=4)
+        self.treasure_mode_combo.bind("<<ComboboxSelected>>", lambda event: self._treasure_controls())
+        ttk.Label(treasure, text="Bậc +").pack(side="left", padx=(8, 3))
+        self.treasure_target_entry = ttk.Entry(treasure, textvariable=self.treasure_target, width=5)
+        self.treasure_target_entry.pack(side="left")
+        self._treasure_controls()
+
+        evolution = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Đột Phá / Giác Tỉnh", padding=8)
+        evolution.pack(fill="x", padx=10, pady=(8, 0))
+        self.evolution_widgets = {}
+        for kind, label in KINDS.items():
+            row = ttk.Frame(evolution)
+            row.pack(fill="x", pady=2)
+            data = self.evolution[kind]
+            button = ttk.Button(row, text=label + " tướng", command=lambda k=kind: self.run_evolution(k))
+            button.pack(side="left")
+            scope = ttk.Combobox(row, textvariable=data["scope"], state="readonly", width=24,
+                values=("Tướng đang chọn", "Toàn đội tối đa 6 tướng"))
+            scope.pack(side="left", padx=8)
+            mode = ttk.Combobox(row, textvariable=data["mode"], state="readonly", width=24,
+                values=("Tự dừng khi không thể", "Dừng ở bậc mục tiêu"))
+            mode.pack(side="left", padx=4)
+            mode.bind("<<ComboboxSelected>>", lambda event: self._evolution_controls())
+            ttk.Label(row, text="Đỏ-Bậc" if kind == "breakthrough" else "Sao").pack(side="left", padx=(8,3))
+            target = ttk.Entry(row, textvariable=data["target"], width=4)
+            target.pack(side="left")
+            inputs = [target]
+            if kind == "awakening":
+                ttk.Label(row, text="Lv").pack(side="left", padx=(8,3))
+                lv = ttk.Entry(row, textvariable=data["lv"], width=4)
+                lv.pack(side="left")
+                inputs.append(lv)
+            self.evolution_widgets[kind] = (button,scope,mode,inputs)
+        self._evolution_controls()
+
+        chest = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Rương", padding=8)
+        chest.pack(fill="x", padx=10, pady=(8, 0))
+        self.chest_button = ttk.Button(chest, text="Mở hết 4 loại rương", command=self.run_chest)
+        self.chest_button.pack(side="left")
+        ttk.Label(chest, text="Tự tăng level khi đủ EXP · Dừng khi hết rương hoặc không thể mở").pack(side="left", padx=12)
 
         body = ttk.Frame(self.root, padding=10)
         body.pack(fill="both", expand=True)
@@ -258,7 +372,7 @@ class App:
         ttk.Button(right, text="Chạy kịch bản nâng cao", command=self.run_steps).pack(fill="x", pady=(6, 0))
 
         foot = ttk.Frame(self.root, padding=(10, 0, 10, 10))
-        foot.pack(fill="x")
+        foot.pack(side="bottom", fill="x", before=body)
         ttk.Button(foot, text="Đăng nhập tài khoản đã chọn", command=self.run_login).pack(side="left")
         ttk.Button(foot, text="Dừng sau bước hiện tại", command=self.stop_event.set).pack(side="left", padx=8)
         ttk.Label(foot, textvariable=self.status, wraplength=850).pack(side="left", padx=12)
@@ -326,6 +440,11 @@ class App:
             messagebox.showwarning("Đăng nhập đã dừng", result.message +
                                    (f"\nẢnh chẩn đoán: {result.screenshot}" if result.screenshot else ""))
 
+    def _dungeon_controls(self) -> None:
+        self.dungeon_limit_entry.configure(state="disabled" if self.busy else "normal")
+        self.dungeon_spam_check.configure(state="disabled" if self.busy else "normal")
+        self.dungeon_spam_entry.configure(state="normal" if not self.busy and self.dungeon_spam.get() else "disabled")
+
     def run_dungeon(self) -> None:
         if self.busy:
             self.status.set("Đang thực hiện một thao tác khác.")
@@ -338,8 +457,18 @@ class App:
             if limit < 0:
                 raise ValueError()
         except ValueError:
-            messagebox.showinfo("Phó bản", "Số ải thắng phải là số nguyên từ 0 trở lên. Nhập 0 để chạy đến khi thua.")
+            messagebox.showinfo("Phó bản", "Số ải thắng phải là số nguyên từ 0 trở lên. Nhập 0 để không giới hạn số ải thắng.")
             return
+        spam = self.dungeon_spam.get()
+        spam_limit = 100
+        if spam:
+            try:
+                spam_limit = int(self.dungeon_spam_limit.get())
+                if spam_limit < 1:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showinfo("Phó bản · Spam", "Số lần spam phải là số nguyên lớn hơn 0 (mặc định 100).")
+                return
         serial = self.serial.get().strip()
         package = self.package.get().strip() or PACKAGE
         self.stop_event.clear()
@@ -352,14 +481,20 @@ class App:
             engine = DungeonEngine(device, stop=self.stop_event,
                                    progress=lambda text: self.events.put(("progress", text, None)),
                                    preview=lambda png: self.events.put(("frame", png, None)))
-            return engine.run(max_wins=limit)
+            return engine.run(max_wins=limit, spam=spam, spam_limit=spam_limit)
 
         self._worker(work, self._dungeon_complete)
 
     def _dungeon_complete(self, result) -> None:
         self.last_dungeon_result = result
         self.status.set(result.message)
-        if result.status in {"error", "unknown", "timeout", "needs_samples", "existing_result"}:
+        if result.status == "spam_limit":
+            again = messagebox.askyesno("Phó bản · Đã hết lượt spam", result.message +
+                "\n\nChạy lượt spam mới với số lần đã cài đặt?\nChọn Không để dừng và giữ nguyên màn hình kết quả.",
+                parent=self.root)
+            if again:
+                self.root.after_idle(self.run_dungeon)
+        elif result.status in {"error", "unknown", "timeout", "needs_samples", "existing_result", "auto_unverified", "retry_unverified"}:
             messagebox.showwarning("Phó bản đã dừng", result.message +
                                    (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
 
@@ -367,7 +502,13 @@ class App:
         self.busy = value
         self.account_combo.configure(state="disabled" if value else "readonly")
         self.dungeon_button.configure(state="disabled" if value else "normal")
+        self._dungeon_controls()
         self.equipment_button.configure(state="disabled" if value else "normal")
+        self._advance_controls()
+        self._level_controls()
+        self._treasure_controls()
+        self._evolution_controls()
+        self.chest_button.configure(state="disabled" if value else "normal")
         if message:
             self.status.set(message)
 
@@ -399,6 +540,236 @@ class App:
         if result.status in {"error", "blocked", "needs_samples"}:
             messagebox.showwarning("Skill trang bị đã dừng", result.message +
                                    (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
+
+    def _advance_controls(self):
+        self.advance_button.configure(state="disabled" if self.busy else "normal")
+        for combo in (self.advance_scope_combo, self.advance_mode_combo):
+            combo.configure(state="disabled" if self.busy else "readonly")
+        active = self.advance_mode.get() == "Dừng ở bậc mục tiêu"
+        self.advance_target_entry.configure(state="normal" if active and not self.busy else "disabled")
+
+    def run_advance(self):
+        if self.busy:
+            self.status.set("Đang thực hiện một thao tác khác.")
+            return
+        if not AdvanceDetector().ready or not EquipmentDetector().ready:
+            messagebox.showinfo("Tiến cấp", "Thiếu bộ ảnh nhận diện; hãy khôi phục assets/advance và assets/equipment.")
+            return
+        target = None
+        if self.advance_mode.get() == "Dừng ở bậc mục tiêu":
+            text = self.advance_target.get().strip()
+            if not text.isascii() or not text.isdigit():
+                messagebox.showinfo("Tiến cấp", "Nhập bậc mục tiêu là số nguyên từ 0 đến 999.")
+                return
+            target = int(text)
+            try:
+                AdvanceSkill.validate_target(target)
+            except ValueError as exc:
+                messagebox.showinfo("Tiến cấp", str(exc))
+                return
+        whole_team = self.advance_scope.get() == "Toàn đội tối đa 6 tướng"
+        serial, package = self.serial.get().strip(), self.package.get().strip() or PACKAGE
+        self.stop_event.clear()
+
+        def work():
+            connect(self.adb, serial)
+            if foreground_package(self.adb, serial) != package:
+                raise AdbError("Hãy mở OMG 3Q và vào nhân vật trước.")
+            device = AdbDevice(self.adb, serial, run_adb, input_text, package)
+            skill_class = TeamAdvanceSkill if whole_team else AdvanceSkill
+            skill = skill_class(device, stop=self.stop_event,
+                progress=lambda text: self.events.put(("progress", text, None)),
+                preview=lambda png: self.events.put(("frame", png, None)))
+            return skill.run(target_rank=target)
+
+        self._worker(work, self._advance_complete)
+
+    def _advance_complete(self, result):
+        self.last_advance_result = result
+        self.status.set(result.message)
+        if result.status in {"error", "blocked", "needs_samples"}:
+            messagebox.showwarning("Tiến cấp đã dừng", result.message +
+                (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
+
+    def _level_controls(self):
+        self.level_button.configure(state="disabled" if self.busy else "normal")
+        for combo in (self.level_scope_combo, self.level_mode_combo):
+            combo.configure(state="disabled" if self.busy else "readonly")
+        active = self.level_mode.get() == "Dừng ở cấp mục tiêu"
+        self.level_target_entry.configure(state="normal" if active and not self.busy else "disabled")
+
+    def run_level(self):
+        if self.busy:
+            self.status.set("Đang thực hiện một thao tác khác.")
+            return
+        if not LevelDetector().ready or not EquipmentDetector().ready:
+            messagebox.showinfo("Tăng cấp", "Thiếu bộ ảnh nhận diện; hãy khôi phục assets/level và assets/equipment.")
+            return
+        target = None
+        if self.level_mode.get() == "Dừng ở cấp mục tiêu":
+            text = self.level_target.get().strip()
+            if not text.isascii() or not text.isdigit():
+                messagebox.showinfo("Tăng cấp", "Nhập cấp mục tiêu là số nguyên từ 0 đến 999.")
+                return
+            target = int(text)
+            try:
+                LevelSkill.validate_target(target)
+            except ValueError as exc:
+                messagebox.showinfo("Tăng cấp", str(exc))
+                return
+        whole_team = self.level_scope.get() == "Toàn đội tối đa 6 tướng"
+        serial, package = self.serial.get().strip(), self.package.get().strip() or PACKAGE
+        self.stop_event.clear()
+
+        def work():
+            connect(self.adb, serial)
+            if foreground_package(self.adb, serial) != package:
+                raise AdbError("Hãy mở OMG 3Q và vào nhân vật trước.")
+            device = AdbDevice(self.adb, serial, run_adb, input_text, package)
+            skill_class = TeamLevelSkill if whole_team else LevelSkill
+            skill = skill_class(device, stop=self.stop_event,
+                progress=lambda text: self.events.put(("progress", text, None)),
+                preview=lambda png: self.events.put(("frame", png, None)))
+            return skill.run(target_level=target)
+
+        self._worker(work, self._level_complete)
+
+    def _level_complete(self, result):
+        self.last_level_result = result
+        self.status.set(result.message)
+        if result.status in {"error", "blocked", "needs_samples"}:
+            messagebox.showwarning("Tăng cấp đã dừng", result.message +
+                (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
+
+    def _treasure_controls(self):
+        self.treasure_button.configure(state="disabled" if self.busy else "normal")
+        for combo in (self.treasure_scope_combo, self.treasure_mode_combo):
+            combo.configure(state="disabled" if self.busy else "readonly")
+        active = self.treasure_mode.get() == "Dừng ở bậc mục tiêu"
+        self.treasure_target_entry.configure(state="normal" if active and not self.busy else "disabled")
+
+    def run_treasure(self):
+        if self.busy:
+            self.status.set("Đang thực hiện một thao tác khác.")
+            return
+        if not TreasureDetector().ready or not EquipmentDetector().ready:
+            messagebox.showinfo("Cường hóa bảo vật", "Thiếu bộ ảnh nhận diện; hãy khôi phục assets/treasure, assets/advance và assets/equipment.")
+            return
+        target = None
+        if self.treasure_mode.get() == "Dừng ở bậc mục tiêu":
+            text = self.treasure_target.get().strip()
+            if not text.isascii() or not text.isdigit():
+                messagebox.showinfo("Cường hóa bảo vật", "Nhập bậc mục tiêu là số nguyên từ 0 đến 999.")
+                return
+            target = int(text)
+            try:
+                TreasureSkill.validate_target(target)
+            except ValueError as exc:
+                messagebox.showinfo("Cường hóa bảo vật", str(exc))
+                return
+        whole_team = self.treasure_scope.get() == "Toàn đội tối đa 6 tướng"
+        serial, package = self.serial.get().strip(), self.package.get().strip() or PACKAGE
+        self.stop_event.clear()
+
+        def work():
+            connect(self.adb, serial)
+            if foreground_package(self.adb, serial) != package:
+                raise AdbError("Hãy mở OMG 3Q và vào nhân vật trước.")
+            device = AdbDevice(self.adb, serial, run_adb, input_text, package)
+            skill_class = TeamTreasureSkill if whole_team else TreasureSkill
+            skill = skill_class(device, stop=self.stop_event,
+                progress=lambda text: self.events.put(("progress", text, None)),
+                preview=lambda png: self.events.put(("frame", png, None)))
+            return skill.run(target_rank=target)
+
+        self._worker(work, self._treasure_complete)
+
+    def _treasure_complete(self, result):
+        self.last_treasure_result = result
+        self.status.set(result.message)
+        if result.status in {"error", "blocked", "needs_samples"}:
+            messagebox.showwarning("Cường hóa bảo vật đã dừng", result.message +
+                (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
+
+    def _evolution_controls(self):
+        for kind, (button, scope, mode, inputs) in self.evolution_widgets.items():
+            button.configure(state="disabled" if self.busy else "normal")
+            for combo in (scope,mode):
+                combo.configure(state="disabled" if self.busy else "readonly")
+            active = self.evolution[kind]["mode"].get() == "Dừng ở bậc mục tiêu"
+            for entry in inputs:
+                entry.configure(state="normal" if active and not self.busy else "disabled")
+
+    def run_evolution(self, kind):
+        if self.busy:
+            self.status.set("Đang thực hiện một thao tác khác.")
+            return
+        label = KINDS[kind]
+        if not EvolutionDetector(kind).ready:
+            messagebox.showinfo(label, "Thiếu bộ ảnh nhận diện " + label + ".")
+            return
+        data = self.evolution[kind]
+        target = None
+        if data["mode"].get() == "Dừng ở bậc mục tiêu":
+            values = [data["target"].get().strip()]
+            if kind == "awakening":
+                values.append(data["lv"].get().strip())
+            if any(not v.isascii() or not v.isdigit() or not 0 <= int(v) <= 999 for v in values):
+                messagebox.showinfo(label, "Nhập mốc là số nguyên từ 0 đến 999.")
+                return
+            target = tuple(map(int,values))
+        whole_team = data["scope"].get() == "Toàn đội tối đa 6 tướng"
+        serial, package = self.serial.get().strip(), self.package.get().strip() or PACKAGE
+        self.stop_event.clear()
+
+        def work():
+            connect(self.adb,serial)
+            if foreground_package(self.adb,serial) != package:
+                raise AdbError("Hãy mở OMG 3Q và vào nhân vật trước.")
+            device = AdbDevice(self.adb,serial,run_adb,input_text,package)
+            skill_class = TeamEvolutionSkill if whole_team else EvolutionSkill
+            skill = skill_class(device,kind=kind,stop=self.stop_event,
+                progress=lambda text:self.events.put(("progress",text,None)),
+                preview=lambda png:self.events.put(("frame",png,None)))
+            return skill.run(target_rank=target)
+
+        self._worker(work,lambda result:self._evolution_complete(kind,result))
+
+    def _evolution_complete(self,kind,result):
+        setattr(self,"last_"+kind+"_result",result)
+        self.status.set(result.message)
+        if result.status in {"error","blocked","needs_samples"}:
+            messagebox.showwarning(KINDS[kind]+" đã dừng", result.message +
+                (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
+
+    def run_chest(self):
+        if self.busy:
+            self.status.set("Đang thực hiện một thao tác khác.")
+            return
+        if not ChestDetector().ready:
+            messagebox.showinfo("Mở rương", "Thiếu bộ ảnh nhận diện trong assets/chest.")
+            return
+        serial, package = self.serial.get().strip(), self.package.get().strip() or PACKAGE
+        self.stop_event.clear()
+
+        def work():
+            connect(self.adb,serial)
+            if foreground_package(self.adb,serial) != package:
+                raise AdbError("Hãy mở OMG 3Q và vào nhân vật trước.")
+            device = AdbDevice(self.adb,serial,run_adb,input_text,package)
+            skill = ChestSkill(device,stop=self.stop_event,
+                progress=lambda text:self.events.put(("progress",text,None)),
+                preview=lambda png:self.events.put(("frame",png,None)))
+            return skill.run()
+
+        self._worker(work,self._chest_complete)
+
+    def _chest_complete(self,result):
+        self.last_chest_result = result
+        self.status.set(result.message)
+        if result.status in {"error", "blocked", "needs_samples", "partial"}:
+            messagebox.showwarning("Mở rương đã dừng", result.message +
+                (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
 
     def _worker(self, func, done=None) -> None:
         if self.busy:

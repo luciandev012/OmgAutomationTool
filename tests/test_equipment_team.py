@@ -173,6 +173,18 @@ class TeamTests(unittest.TestCase):
         self.assertEqual(len(cards), 1)
         self.assertTrue(cards[0].selected)
 
+    def test_empty_slot_when_plus_is_invisible_has_no_portrait_detail(self):
+        detector = EquipmentDetector()
+        path = Path(__file__).parent / 'fixtures/equipment/roster_hidden_plus.png'
+        frame = cv2.imdecode(np.frombuffer(path.read_bytes(), np.uint8), 1)
+        self.assertEqual(len(detector.visible_heroes(frame)), 3)
+
+    def test_dim_pulsing_empty_slot_is_not_a_sixth_hero(self):
+        detector = EquipmentDetector()
+        path = Path(__file__).parent / 'fixtures/equipment/roster_dim_empty.png'
+        frame = cv2.imdecode(np.frombuffer(path.read_bytes(), np.uint8), 1)
+        self.assertEqual(len(detector.visible_heroes(frame)), 3)
+
     def test_team_stat_samples_remain_readable_after_adding_glyph_variants(self):
         detector = EquipmentDetector()
         folder = Path(__file__).parent / 'fixtures/equipment'

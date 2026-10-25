@@ -152,7 +152,10 @@ class EquipmentDetector(DungeonDetector):
                 continue
             cx = anchor - 7
             portrait = frame[cy-25:cy+25, cx-25:cx+25]
-            if portrait.shape[:2] != (50, 50) or float(portrait.std()) < 15:
+            # In the plus animation's invisible phase, the empty slot is flat
+            # brown. Measure spatial luminance; RGB channel differences are
+            # not portrait detail.
+            if portrait.shape[:2] != (50, 50) or float(cv2.cvtColor(portrait, cv2.COLOR_BGR2GRAY).std()) < 15:
                 continue
             fingerprint = cv2.resize(portrait, (16, 20), interpolation=cv2.INTER_AREA).tobytes()
             pointer = frame[cy-20:cy+20, anchor+40:anchor+56]
@@ -450,7 +453,18 @@ class TeamEquipmentSkill(EquipmentSkill):
     def _scroll(self, frame, direction):
         self._swipe_roster(frame, direction)
         self.sleeper(1)
-        return self._observe()
+        previous = self.detector.visible_heroes(frame)
+        deadline = self.clock() + self.timeout
+        while self.clock() < deadline:
+            frame = self._observe()
+            current = self.detector.visible_heroes(frame)
+            if (self._same_view(previous, current)
+                    and all(abs(a.y-b.y) <= 2 and a.selected == b.selected
+                            for a,b in zip(previous,current))):
+                return frame
+            previous = current
+            self.sleeper(.5)
+        raise TimeoutError("Danh sách tướng chưa ổn định sau cuộn; chưa chọn tướng tiếp theo.")
 
     def _swipe_roster(self, frame, direction):
         self._check()
@@ -475,7 +489,17 @@ class TeamEquipmentSkill(EquipmentSkill):
                 if stable >= 2:
                     return frame
             self.sleeper(.5)
-        raise TimeoutError("Chưa xác nhận chọn đúng tướng; không trang bị hoặc cường hóa.")
+        raise TimeoutError("Chưa xác nhận chọn đúng tướng; chưa chạy thao tác nâng cấp.")
+
+    def _make_hero_skill(self, index):
+        return self.hero_skill_factory(
+            self.device, stop=self.stop, detector=self.detector, navigation_detector=self.navigation,
+            progress=lambda text: self.progress(f"Tướng {index}/6: {text}"),
+            preview=self.preview, clock=self.clock, sleeper=self.sleeper, timeout=self.timeout,
+            evidence_root=self.folder / f"hero_{index:02d}")
+
+    def _run_hero(self, child, enhance):
+        return child.run(enhance=enhance)
 
     def _finish_team(self, status, message, heroes):
         import json
@@ -523,12 +547,8 @@ class TeamEquipmentSkill(EquipmentSkill):
                 self.progress(f"Tướng {index}/{max_heroes}: chọn và xác nhận chân dung…")
                 frame = self._select_hero(frame, target)
                 visited.append(target)
-                child = self.hero_skill_factory(
-                    self.device, stop=self.stop, detector=self.detector, navigation_detector=self.navigation,
-                    progress=lambda text, i=index: self.progress(f"Tướng {i}/{max_heroes}: {text}"),
-                    preview=self.preview, clock=self.clock, sleeper=self.sleeper, timeout=self.timeout,
-                    evidence_root=self.folder / f"hero_{index:02d}")
-                outcome = child.run(enhance=enhance)
+                child = self._make_hero_skill(index)
+                outcome = self._run_hero(child, enhance)
                 if child.last_png:
                     self.last_png = child.last_png
                 results.append(HeroEquipmentResult(index, hashlib.sha256(target.fingerprint).hexdigest()[:12], outcome))
