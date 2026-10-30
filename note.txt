@@ -24,7 +24,7 @@ Những phần đã triển khai
    - Cập nhật tổng Hoàn Thành và dòng tổng, gồm công thức và giá trị tính sẵn.
    - Script A chọn ngày 1 chưa xong; B chọn ngày tiếp theo của chuỗi liên tiếp;
      C chọn tài khoản có tổng hoàn thành ít nhất 2 và không ghi cột ngày.
-   - Hết tài khoản thì tắt instance; chỉ xóa trạng thái hàng sau khi xác nhận tắt.
+   - Hết tài khoản thì tắt instance; giữ nguyên Status V/ERR. X chưa hoàn thành cũng không tự xóa.
    - Giữ hàng chưa hoàn thành khi lỗi; xử lý lỗi lưu và tương thích namespace Excel.
 4. Đăng nhập và quan sát màn hình:
    - Điều chỉnh luồng đổi tài khoản, giảm khởi động lại game trong bước xác thực.
@@ -57,3 +57,16 @@ Ghi chú merge
 - Commit và push bản này lên branch phát triển; chưa merge vào branch đích.
 - Merge kết hợp thay đổi từ điểm chung của hai branch, có thể thay thế hành vi cũ.
 - Những đoạn cùng bị sửa ở hai branch có thể cần giải quyết conflict khi merge.
+
+
+CẬP NHẬT 30/10/2026 — Automation_Daily
+- Tích hợp giao diện thu gọn/co giãn từ Auto-Clone, giữ các cập nhật logic mới.
+- Nhập danh sách 75 tài khoản vào account.xlsx cục bộ; tệp chứa TK/MK không đưa lên Git.
+- Danh sách Excel và dòng tổng thích ứng khi số hàng thay đổi.
+- X → V khi thành công; ERR cho sai TK/MK 8011; V/ERR giữ nguyên sau khi tắt instance.
+- Khớp cả ảnh lỗi và OK, ghi ERR trước khi chuyển tài khoản; xóa hai ô nhập.
+- Bổ sung mẫu ảnh lỗi/OK từ ảnh gốc và từ ảnh ADB thực tế, không hạ ngưỡng 0,99.
+- Thêm các chế độ test theo instance/STT, ghi thời gian từng bước/lệnh ADB.
+- Bỏ timeout/nghỉ cố định chỉ khi chọn rõ cho phiên test; mặc định thường giữ nguyên.
+- Đã test thật STT 7 thành công (V/ngày 1=1), STT 8 sai đăng nhập (ERR/ngày 1 trống).
+- Script A/B/C vẫn là chu trình thử, chưa có nhiệm vụ thật riêng cho từng ngày.

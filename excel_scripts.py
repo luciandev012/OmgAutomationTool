@@ -5,7 +5,7 @@ import time
 import cv2
 import numpy as np
 
-from login_engine import AdbDevice, Detector, LoginEngine
+from login_engine import AdbDevice, Detector, LoginEngine, InvalidCredentialsError
 from dungeon_engine import DungeonDetector
 from task_sessions import active_session
 
@@ -19,12 +19,20 @@ class ExcelCycle:
             capture_options={'checkpoint': self.control.checkpoint,
                              'sleeper': self.control.sleep, 'progress': progress})
         self.progress = progress
+        self.on_invalid_credentials = None
+        self._start_from_current = False
 
     def run(self, account):
         result = LoginEngine(self.device, stop=self.control.cancelled,
             clock=self.control.clock, sleeper=self.control.sleep, progress=self.progress,
             timeout=240).run(account.username, account.password, reset=False,
-                accept_terms=True, enter_game=True, prefer_played_server=True)
+                accept_terms=True, enter_game=True, prefer_played_server=True,
+                launch_on_start=not self._start_from_current,
+                on_invalid_credentials=lambda: self.on_invalid_credentials(account) if self.on_invalid_credentials else None)
+        if result.status == 'invalid_credentials':
+            self._start_from_current = True
+            raise InvalidCredentialsError(result.message)
+        self._start_from_current = False
         if result.status != 'success':
             raise ValueError(result.message)
         detector = DungeonDetector()
@@ -101,6 +109,7 @@ class ScriptBatch:
         try:
             with active_session(session):
                 cycle = self.cycle_factory(session)
+                cycle.on_invalid_credentials = lambda account: self.workbook.mark_error(account, session)
                 while not self.abort.is_set():
                     session.control.checkpoint()
                     account = self.workbook.claim(self.script, session)
@@ -108,13 +117,19 @@ class ScriptBatch:
                         break
                     secret = account.password
                     self.audit('reserved', session, account.row)
-                    self.progress(session, f'Script {self.script} · dòng {account.row} · Status x')
-                    cycle.run(account)
+                    self.progress(session, f'Script {self.script} · dòng {account.row} · Status X')
+                    try:
+                        cycle.run(account)
+                    except InvalidCredentialsError:
+                        self.workbook.mark_error(account, session)
+                        self.audit('invalid_credentials', session, account.row)
+                        self.progress(session, f'Dòng {account.row}: ERR (8011); lấy tài khoản trống tiếp theo.')
+                        continue
                     session.control.checkpoint()
                     self.workbook.complete(account, session)
                     count += 1
                     self.audit('completed', session, account.row)
-                    self.progress(session, f'Dòng {account.row} đã hoàn thành · Status v')
+                    self.progress(session, f'Dòng {account.row} đã hoàn thành · Status V')
                 if not self.abort.is_set():
                     self.progress(session, 'Hết tài khoản phù hợp; đang tắt giả lập…')
                     self.shutdown(session)

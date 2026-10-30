@@ -182,9 +182,9 @@ def open_instance(provider, instance, package, run_adb, launch_game, control, pr
     progress(f"Đang khởi động {provider.label} · {instance.name}…")
     if not instance.running:
         provider.launch(instance.index)
-    deadline = time.monotonic() - control.pause_seconds + timeout
+    deadline = None if timeout is None else time.monotonic() - control.pause_seconds + timeout
     last_error = "Chưa tìm thấy thiết bị ADB của instance."
-    while time.monotonic() - control.pause_seconds < deadline:
+    while deadline is None or time.monotonic() - control.pause_seconds < deadline:
         control.checkpoint()
         try:
             # LD's console also needs the shared server before get-serialno.

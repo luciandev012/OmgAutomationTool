@@ -26,8 +26,9 @@ class ExcelAccount:
 
 
 class AccountWorkbook:
-    def __init__(self, path):
+    def __init__(self, path, *, status_marks=('X', 'V')):
         self.path = Path(path)
+        self.status_marks = status_marks
         self.lock = threading.RLock()
         self.seen = set()
         self.owners = {}
@@ -36,9 +37,9 @@ class AccountWorkbook:
             headers = [self._value(f'{chr(65+i)}1') for i in range(20)]
             if headers[:4] != ['STT', 'TK', 'MK', 'Status'] or headers[4:19] != [str(i) for i in range(1,16)] or headers[19].casefold() != 'hoàn thành':
                 raise ValueError('Excel cần cột STT, TK, MK, Status, 1–15, Hoàn Thành.')
-            self.rows = [r for r in sorted(self.sheet_rows) if r > 1 and self._value(f'B{r}') and self._value(f'C{r}') and self._cell(f'B{r}').find(tag('f')) is None]
             if not self.rows:
                 raise ValueError('Excel chưa có hàng tài khoản/mật khẩu hợp lệ.')
+            self._totals()
             # Detect a locked/unwritable workbook before sending any game input.
             self._save()
 
@@ -59,6 +60,11 @@ class AccountWorkbook:
         self.cells = {c.attrib['r']: c for row in self.data for c in row}
         strings = self.parts.get('xl/sharedStrings.xml')
         self.strings = [''.join(x.itertext()) for x in ET.fromstring(strings[1])] if strings else []
+        # Re-discover the list on each read instead of retaining the old length.
+        self.rows = [r for r in sorted(self.sheet_rows) if r > 1
+                     and self._value(f'A{r}').strip() != 'Tổng đã hoàn thành'
+                     and self._value(f'B{r}') and self._value(f'C{r}')
+                     and self.cells[f'B{r}'].find(tag('f')) is None]
 
     def _cell(self, address):
         if address not in self.cells:
@@ -108,15 +114,57 @@ class AccountWorkbook:
     def _totals(self):
         for row in self.rows:
             self._set(f'T{row}', sum(self._days(row)), f'SUM(E{row}:S{row})')
-        footer = max(self.rows) + 1
-        if self._value(f'A{footer}') != 'Tổng đã hoàn thành':
-            raise ValueError('Không tìm thấy dòng Tổng đã hoàn thành ngay dưới danh sách tài khoản.')
+        footer = self._place_footer()
         first, last = min(self.rows), max(self.rows)
         self._set(f'D{footer}', sum(self._value(f'D{r}').lower() == 'v' for r in self.rows), f'COUNTIFS(D{first}:D{last},"v")')
         for i in range(15):
             col = chr(69+i)
             self._set(f'{col}{footer}', sum(self._days(r)[i] for r in self.rows), f'SUM({col}{first}:{col}{last})')
         self._set(f'T{footer}', sum(sum(self._days(r)) for r in self.rows), f'SUM(T{first}:T{last})')
+
+    def _place_footer(self):
+        """Keep one total row immediately after the current account list."""
+        footer = max(self.rows) + 1
+        totals = [r for r in self.sheet_rows
+                  if self._value(f'A{r}').strip() == 'Tổng đã hoàn thành']
+        if len(totals) > 1:
+            raise ValueError('Excel có nhiều dòng Tổng đã hoàn thành; hãy giữ một dòng.')
+        old = totals[0] if totals else None
+        if old != footer:
+            occupied = self.sheet_rows.get(footer)
+            if occupied is not None and any(
+                    self._value(c.attrib['r']) or c.find(tag('f')) is not None
+                    for c in occupied):
+                raise ValueError('Dòng ngay dưới danh sách có dữ liệu; chưa di chuyển dòng tổng.')
+            if old is not None:
+                row = self.sheet_rows[old]
+                self.data.remove(row)
+                if occupied is not None:
+                    self.data.remove(occupied)
+                row.set('r', str(footer))
+                for cell in row:
+                    cell.set('r', re.sub(r'\d+$', str(footer), cell.attrib['r']))
+                position = next((i for i, r in enumerate(self.data)
+                                 if int(r.attrib['r']) > footer), len(self.data))
+                self.data.insert(position, row)
+                merges = self.sheet.find(tag('mergeCells'))
+                if merges is not None:
+                    for merge in merges:
+                        match = re.fullmatch(r'([A-Z]+)(\d+):([A-Z]+)(\d+)', merge.attrib['ref'])
+                        if match and int(match[2]) == old and int(match[4]) == old:
+                            merge.set('ref', f'{match[1]}{footer}:{match[3]}{footer}')
+                self.sheet_rows = {int(r.attrib['r']): r for r in self.data}
+                self.cells = {c.attrib['r']: c for r in self.data for c in r}
+            else:
+                self._set(f'A{footer}', 'Tổng đã hoàn thành')
+            dimension = self.sheet.find(tag('dimension'))
+            if dimension is not None:
+                end = dimension.attrib.get('ref', 'A1:T1').split(':')[-1]
+                match = re.fullmatch(r'([A-Z]+)(\d+)', end)
+                if match and footer > int(match[2]):
+                    start = dimension.attrib['ref'].split(':')[0]
+                    dimension.set('ref', f'{start}:{match[1]}{footer}')
+        return footer
 
     def _save(self):
         # tempfile.mkstemp retries PermissionError repeatedly on Windows.
@@ -164,11 +212,15 @@ class AccountWorkbook:
         ET.fromstring(content)
         return content
 
-    def claim(self, script, owner):
+    def claim(self, script, owner, *, stt=None, allowed_stts=None):
         with self.lock:
             self._read()
             for row in self.rows:
+                if stt is not None and self._value(f'A{row}').strip() != str(stt):
+                    continue
                 if row in self.seen or self._value(f'D{row}').strip():
+                    continue
+                if allowed_stts is not None and self._value(f'A{row}').strip() not in {str(v) for v in allowed_stts}:
                     continue
                 days = self._days(row)
                 day = None
@@ -188,7 +240,7 @@ class AccountWorkbook:
                         continue
                 else:
                     raise ValueError('Script phải là A, B hoặc C.')
-                self._set(f'D{row}', 'x')
+                self._set(f'D{row}', self.status_marks[0])
                 self._totals()
                 self._save()
                 self.seen.add(row)
@@ -199,19 +251,29 @@ class AccountWorkbook:
     def complete(self, account, owner):
         with self.lock:
             self._read()
-            if self.owners.get(account.row) is not owner or self._value(f'D{account.row}') != 'x':
+            if self.owners.get(account.row) is not owner or self._value(f'D{account.row}').casefold() != 'x':
                 raise ValueError('Hàng tài khoản không còn thuộc instance đang xử lý.')
             if account.day:
                 self._set(f'{chr(68+account.day)}{account.row}', 1)
-            self._set(f'D{account.row}', 'v')
+            self._set(f'D{account.row}', self.status_marks[1])
+            self._totals()
+            self._save()
+
+    def mark_error(self, account, owner):
+        """Persist confirmed invalid credentials without changing any day result."""
+        with self.lock:
+            self._read()
+            status = self._value(f'D{account.row}').casefold()
+            if self.owners.get(account.row) is not owner or status not in {'x', 'err'}:
+                raise ValueError('Hàng tài khoản không còn thuộc instance đang xử lý.')
+            if status == 'err':
+                return
+            self._set(f'D{account.row}', 'ERR')
             self._totals()
             self._save()
 
     def release_after_shutdown(self, owner):
+        """Release only in-memory ownership; preserve all workbook statuses."""
         with self.lock:
-            self._read()
-            for row, assigned in self.owners.items():
-                if assigned is owner:
-                    self._set(f'D{row}', '')
-            self._totals()
-            self._save()
+            self.owners = {row: assigned for row, assigned in self.owners.items()
+                           if assigned is not owner}

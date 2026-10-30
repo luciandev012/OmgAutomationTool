@@ -24,7 +24,6 @@ def dialog_fixture():
     dialog.app = Mock()
     dialog.app.sessions = SessionRegistry()
     dialog.app.events = queue.Queue()
-    dialog.app.package.get.return_value = 'com.gs2.omg'
     dialog.selection_count = Mock()
     dialog.message = Mock()
     dialog.start, dialog.pause, dialog.resume, dialog.stop = (Mock() for _ in range(4))

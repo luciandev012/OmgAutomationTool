@@ -51,7 +51,7 @@ tích lại A → Tiếp tục. Chọn tất cả / Bỏ chọn tất cả giúp
 Làm mới nạp lại danh sách và bỏ các dấu tích, không làm mất tác vụ đang chạy.
 
 - **Tạm dừng**: chặn các thao tác tiếp theo của tool trên các máy được tích,
-  kể cả tác vụ đăng nhập / phó bản / trang bị / kịch bản sau khi mở game.
+  kể cả tác vụ đăng nhập / phó bản / trang bị sau khi mở game.
 - **Tiếp tục**: cho các máy được tích tiếp tục tác vụ đang tạm dừng.
 - **Dừng tác vụ**: hủy tác vụ trên các máy được tích; không tắt game hay giả lập.
   Muốn chạy lại cần chủ động gửi lệnh mới. Tiếp tục không khôi phục tác vụ đã hủy.
@@ -60,7 +60,7 @@ Làm mới nạp lại danh sách và bỏ các dấu tích, không làm mất t
   Mở lại hộp thoại để điều khiển tiếp. Thoát toàn bộ tool sẽ yêu cầu dừng mọi tác vụ.
 
 Ở cửa sổ chính, chọn **Thao tác trên** theo tên máy đã kết nối trước khi chạy
-đăng nhập, phó bản, trang bị hoặc kịch bản. Có thể bắt đầu tác vụ trên A rồi chuyển
+đăng nhập, phó bản, trang bị. Có thể bắt đầu tác vụ trên A rồi chuyển
 sang B để chạy tác vụ khác. Mỗi máy chỉ nhận một tác vụ tại một thời điểm;
 đổi máy trên giao diện không đổi đích ADB của tác vụ đã chạy. Các thao tác chính
 áp dụng cho máy ở ô Thao tác trên; checkbox trong hộp thoại dùng để gửi lệnh điều khiển.
@@ -75,6 +75,9 @@ Thông tin đăng nhập lấy hoàn toàn từ `account.xlsx`, không dùng dan
 hay ô mật khẩu chung. Đóng Excel trước khi chạy để tool có thể lưu tệp.
 Cấu trúc: `STT | TK | MK | Status | 1 … 15 | Hoàn Thành`;
 dòng ngay dưới tài khoản cuối là `Tổng đã hoàn thành`.
+Tool đọc số lượng tài khoản theo danh sách hiện có, tự chuyển dòng tổng xuống cuối
+và cập nhật công thức khi thêm tài khoản; không cố định số hàng. Tài khoản và mật
+khẩu phải được lưu dưới dạng văn bản để giữ nguyên số 0 đầu và ký tự đặc biệt.
 
 Mở và kết nối các instance, chọn tệp rồi bấm một trong ba nút:
 
@@ -85,22 +88,25 @@ Mở và kết nối các instance, chọn tệp rồi bấm một trong ba nút
 
 Ba nút hiện dùng cùng chu trình thử, chưa triển khai nhiệm vụ riêng từng ngày:
 đăng nhập → vào sảnh Cỗ Máy Thời Gian → đóng/mở game → xác nhận thông báo.
-Chỉ sau khi thấy thông báo, tool mới lưu Status `v` và số `1` của A/B,
+Chỉ sau khi thấy thông báo, tool mới lưu Status `V` và số `1` của A/B,
 trước khi đóng thông báo để đăng nhập tài khoản kế tiếp.
 Chu trình đóng/mở là dấu hiệu hoàn thành của bài thử, không phải xóa phiên ZingID;
 bước Đổi Tài Khoản ở lượt tiếp theo vẫn phải xác thực tài khoản Excel mới.
 
-Các instance lấy hàng từ trên xuống, bỏ qua Status không trống, lưu `x` trước
+Các instance lấy hàng từ trên xuống, bỏ qua Status không trống, lưu `X` trước
 khi đăng nhập. Một bộ ghi Excel chung giữ việc nhận hàng và lưu kết quả tuần tự.
 Hoàn Thành và dòng tổng được cập nhật cả công thức lẫn giá trị tính sẵn.
-Status `x`/`v` chỉ được xóa với các hàng thuộc instance đã xác nhận tắt.
-Hàng đã nhận không bị lấy lại trong cùng lượt, kể cả khi Status đã được xóa.
+Status chuyển `X` → `V` khi hoàn thành. `V` và `ERR` được giữ nguyên sau khi
+tắt instance hoặc kết thúc lượt; tool không tự xóa Status. Hàng lỗi/gián đoạn
+giữ `X` nếu chưa xác nhận hoàn thành. Chỉ các hàng có Status trống được nhận tiếp.
 Hết tài khoản thì tự tắt instance; tất cả tắt thành công sẽ báo `Đã xong`.
 Nếu gặp lỗi, giữ nguyên hàng chưa hoàn thành và báo lỗi, không ghi thành công giả.
 
 ## Luồng đăng nhập
 
-`omg3q_tool.py` cung cấp giao diện Tkinter, kết nối ADB và kịch bản nâng cao.
+`omg3q_tool.py` cung cấp giao diện Tkinter thu gọn và kết nối ADB nội bộ qua instance.
+Gói OMG 3Q được dùng cố định; không cần nhập địa chỉ ADB hoặc chọn gói game thủ công.
+Cửa sổ tool và hộp điều khiển instance đều có thể kéo thay đổi kích thước.
 `login_engine.py` nhận diện ảnh từ `assets/login/`, xử lý ZingID, đổi phiên đã lưu,
 chọn server có nhân vật và xác nhận màn hình chính qua hai lần quan sát liên tiếp.
 Các lần nhập đều xóa cả hai phía con trỏ vì Ctrl+A không hoạt động trong biểu mẫu game.
@@ -188,12 +194,11 @@ Kết quả tổng hợp và ảnh từng tướng được lưu trong thư mụ
 
 ## Tệp riêng trên máy
 
-- `account.txt`: mỗi dòng một tên đăng nhập, UTF-8, hỗ trợ BOM.
-- `credentials.local.json`: thuộc tính `common_password` chứa mật khẩu chung.
-- `login_settings.json`: lựa chọn vào game, server đã chơi và quyền tích ô điều khoản.
-- `omg3q_steps.json`: kết nối và kịch bản nâng cao; không chứa mật khẩu.
+- `account.xlsx`: TK/MK, Status X/V/ERR, các ngày 1–15 và tổng Hoàn Thành.
+- `runtime/`: nhật ký test, bản Excel sao lưu và ảnh chẩn đoán.
+- `.venv/`: môi trường Python cục bộ.
 
-Tài khoản, mật khẩu, lựa chọn cá nhân, môi trường Python và tệp chạy thử được loại khỏi Git.
+Các tệp tài khoản, mật khẩu, môi trường và dữ liệu chạy thử được loại khỏi Git.
 Mật khẩu được chuyển tới ADB qua stdin, không xuất hiện trong tham số tiến trình Windows.
 
 ## Kiểm thử
@@ -206,3 +211,42 @@ Mật khẩu được chuyển tới ADB qua stdin, không xuất hiện trong t
 độ phân giải 1920×1080. Bộ nhận diện co ảnh về tỉ lệ tham chiếu 16:9.
 
 `work/` chứa công cụ phát triển và ảnh quan sát cục bộ, không phải thành phần chạy của tool.
+
+## Phiên test đăng nhập Excel trên hai MuMu
+
+Nút **Test Excel · 2 MuMu × 3 lượt** tự mở hai instance MuMu có sẵn.
+Instance tới màn hình đăng nhập trước sẽ nhận hàng phù hợp đầu tiên từ trên xuống.
+Mỗi instance chạy tối đa ba tài khoản: đóng thông báo, giữ chỗ `X`, đăng nhập,
+xác nhận vào sảnh, thoát game, ghi `V` và `1` ở ngày 1, rồi mở lại game để đổi tài khoản.
+Sau lượt cuối vẫn mở lại và đóng thông báo; giữ nguyên Status để đối chiếu Excel.
+
+Lần test bỏ timeout phải được chọn riêng bằng cờ `--test-no-timeout`; nút test
+thông thường vẫn dùng timeout mặc định. Cờ này chỉ có hiệu lực cho lượt chạy đó.
+Các chế độ chạy bình thường giữ timeout cũ. Lệnh ADB riêng lẻ vẫn có giới hạn để
+có thể kiểm tra lại khi kết nối bị kẹt. Tạm dừng/Dừng vẫn có hiệu lực theo instance.
+Lỗi thực sự không được ghi thành công: hàng đang làm giữ `X` để kiểm tra.
+
+Các lần ghi `X`, `V` và ngày 1 được ghi sau khi lưu Excel thành công vào
+`runtime/excel_login_test.jsonl`; nhật ký không chứa tên đăng nhập hoặc mật khẩu.
+Bản Excel trước mỗi phiên test được sao lưu trong `runtime/`.
+Có thể mở trực tiếp phiên test bằng `.venv\Scripts\pythonw.exe omg3q_tool.py --excel-login-test`.
+
+
+## Sai thông tin đăng nhập — lỗi 8011
+
+Sau khi gửi đăng nhập, tool chỉ xử lý khi ảnh `invalid_credentials_8011.png`
+và `ok_button.png` cùng khớp ngưỡng 0,99 trên một ảnh màn hình.
+Tool bấm OK, lưu ngay `ERR` ở Status của hàng đang giữ chỗ, xác nhận lại biểu mẫu,
+xóa hai ô TK/MK rồi lấy hàng phù hợp có Status trống gần nhất từ trên xuống.
+Các hàng X, V, ERR đều được bỏ qua; không ghi số 1 cho tài khoản sai.
+ERR vẫn được giữ khi tắt instance. Nếu lưu ERR thất bại hoặc không xác nhận lại
+được biểu mẫu thì chưa chuyển sang tài khoản khác.
+Lỗi 8011 không tính là một lượt test thành công và không dừng các instance khác.
+
+
+## Giao diện hiện tại
+
+Đã tích hợp giao diện thu gọn từ Auto-Clone: bỏ dòng nhập ADB/gói game,
+bỏ phần ảnh giả lập và kịch bản chạm thủ công cùng code liên quan.
+Giữ Script A/B/C, quản lý instance, phó bản, trang bị và chế độ test Excel.
+Cửa sổ chính tự vừa nội dung; hộp instance mặc định 640×300 và cả hai đều co giãn được.

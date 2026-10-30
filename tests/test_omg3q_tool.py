@@ -1,7 +1,5 @@
 import importlib.util
-import json
 import pathlib
-import tempfile
 import unittest
 from contextlib import ExitStack
 from unittest.mock import Mock, patch
@@ -17,7 +15,7 @@ class ToolTests(unittest.TestCase):
     def test_gui_builds_excel_scripts_without_old_credentials_widgets(self):
         app=tool.App.__new__(tool.App)
         app.root=Mock();app.providers=[]
-        for name in ('provider_name','serial','package','excel_path','dungeon_limit','step_name','status'):
+        for name in ('provider_name','serial','excel_path','dungeon_limit','status'):
             setattr(app,name,Mock())
         app._scan_catalog=Mock()
         app.run_excel_script=Mock()
@@ -106,17 +104,6 @@ class ToolTests(unittest.TestCase):
         self.assertNotIn(b"p@ss", " ".join(args).encode())
         self.assertIn(b"input text", kwargs["data"])
         self.assertIn(b"%s", kwargs["data"])
-
-    def test_configuration_never_contains_credentials(self):
-        with tempfile.TemporaryDirectory(dir=pathlib.Path(__file__).resolve().parent) as folder:
-            path = pathlib.Path(folder) / "settings.json"
-            with patch.object(tool, "CONFIG_FILE", path):
-                tool.save_config("127.0.0.1:16384", "com.example.game",
-                                 [{"action": "username"}, {"action": "password"}])
-                data = json.loads(path.read_text(encoding="utf-8"))
-                self.assertEqual(len(data["steps"]), 2)
-                self.assertNotIn("username", data)
-                self.assertNotIn("password", data)
 
     def test_connect_parses_device_size(self):
         outputs = [b"connected to 127.0.0.1:16384", b"device\n", b"Physical size: 1920x1080\n"]

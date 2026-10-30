@@ -1,32 +1,17 @@
-ĐĂNG NHẬP OMG 3Q TRÊN MUMU PLAYER 12
+HƯỚNG DẪN OMG 3Q — EXCEL VÀ NHIỀU INSTANCE
 
-1. Mở MuMu Player và khởi động thiết bị Android.
-2. Mở Mo-tool-OMG-3Q.cmd.
-3. Chọn tài khoản trong danh sách rồi bấm Đăng nhập tài khoản đã chọn.
+1. Mở Mo-tool-OMG-3Q.cmd.
+2. Chọn MuMu hoặc LDPlayer, bấm Mở, tích các instance cần dùng rồi Khởi động.
+3. Chọn account.xlsx và bấm Script A/B/C; tác vụ phó bản/trang bị dùng instance ở ô Thao tác trên.
+4. Đóng Excel khi chạy để tool có thể lưu trạng thái.
 
-Tool tự mở lại game, đóng thông báo khởi động, mở ZingID, xóa nội dung cũ ở hai ô nhập, nhập thông tin và xác thực. Sau đó tool chọn nhân vật đầu tiên trong tab Tập hợp Server, vào game và kiểm tra màn hình chính.
+Status: X = đang xử lý; V = đã hoàn thành; ERR = sai thông tin đăng nhập 8011.
+V và ERR không bị xóa khi tắt instance. Chỉ các hàng Status trống được nhận tiếp.
+Lỗi 8011: khớp thông báo và OK → bấm OK → ghi ERR → xóa hai ô TK/MK → hàng trống tiếp theo.
+Tool không ghi số 1 cho tài khoản lỗi. Dòng tổng luôn ở dưới danh sách tài khoản.
 
-DANH SÁCH TÀI KHOẢN
-- Tệp account.txt nằm cùng thư mục tool, mỗi dòng là một tên đăng nhập.
-- Sau khi sửa tệp, bấm Nạp lại danh sách. Danh sách cũng tự nạp lại khi bấm Đăng nhập.
-- Dòng trống, dòng bắt đầu bằng # và tài khoản trùng được bỏ qua.
-- Mật khẩu chung đã được nạp sẵn từ credentials.local.json. Có thể thay trong ô Mật khẩu chung cho lần chạy hiện tại, hoặc sửa tệp này để dùng lâu dài.
-- account.txt và credentials.local.json là tệp riêng của máy, được loại khỏi Git.
-
-CÁC LỰA CHỌN
-- Ưu tiên server đã chơi: chọn nhân vật đầu tiên theo thứ tự game hiển thị trong Tập hợp Server. Nếu chưa có server đã chơi, tool dừng trước khi tạo nhân vật.
-- Vào game sau xác thực: bỏ chọn nếu chỉ muốn dừng ở màn hình chọn server.
-- Cho phép tích ô đồng ý điều khoản game: đã bật theo sự cho phép của bạn; có thể tắt trong giao diện.
-- Dừng sau bước hiện tại: ngừng luồng khi thao tác đang chạy kết thúc.
-
-NẾU GAME THAY ĐỔI HOẶC KẾT NỐI LỖI
-- Tool chỉ bấm các nút đã nhận diện được, không tự thử đăng nhập lặp lại khi xác thực thất bại.
-- Khi gặp màn hình chưa nhận diện hoặc chờ quá lâu, tool dừng và lưu ảnh tại runtime/login_last_screen.png. Vùng hai ô đăng nhập được che trong ảnh chẩn đoán.
-- Giữ giả lập ở chế độ ngang, tỉ lệ 16:9. Bản hiện tại được kiểm tra trực tiếp ở 1920×1080.
-- Nếu không kết nối, kiểm tra thiết bị Android đã chạy và cổng ADB trong MuMu. Mặc định trên máy này là 127.0.0.1:16384.
-- Nếu mang mã sang máy khác, cài Python 3.11 và chạy Cai-dat.cmd một lần trước khi mở tool.
-
-Phần Kịch bản nâng cao là công cụ bổ sung cho các tác vụ sẽ làm sau; không cần thiết lập kịch bản để đăng nhập.
+Giao diện đã bỏ nhập ADB/gói game và kịch bản chạm thủ công. Có thể kéo đổi kích thước cả hai cửa sổ.
+Đọc README.md để biết chi tiết các chế độ test và phạm vi tính năng hiện tại.
 
 PHÓ BẢN CỖ MÁY THỜI GIAN
 

@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 from emulator_instances import LaunchCancelled, open_instance
 from task_sessions import active_session
+from login_engine import PACKAGE
 
 
 class InstanceDialog:
@@ -32,12 +33,14 @@ class InstanceDialog:
         self.instances, self.checks, self.state_labels = [], [], {}
         self.window = tk.Toplevel(app.root)
         self.window.title(f"{provider.label} · Điều khiển instance")
-        self.window.geometry('820x470')
+        self.window.geometry('640x300')
+        self.window.resizable(True, True)
+        self.window.minsize(560, 260)
         self.window.transient(app.root)
         self.window.protocol('WM_DELETE_WINDOW', self.close)
-        body = ttk.Frame(self.window, padding=12)
+        body = ttk.Frame(self.window, padding=10)
         body.pack(fill='both', expand=True)
-        ttk.Label(body, text='Tích chọn máy → chọn hành động · Dấu tích tự xóa sau mỗi lệnh').pack(anchor='w')
+        ttk.Label(body, text='Tích chọn máy → chọn hành động · Dấu tích tự xóa sau mỗi lệnh', wraplength=520).pack(anchor='w')
         selection = ttk.Frame(body)
         selection.pack(fill='x', pady=(8,0))
         ttk.Button(selection, text='Chọn tất cả', command=lambda: self.set_checks(True)).pack(side='left')
@@ -46,7 +49,7 @@ class InstanceDialog:
         ttk.Label(selection, textvariable=self.selection_count).pack(side='right')
         listing = ttk.Frame(body)
         listing.pack(fill='both', expand=True, pady=8)
-        self.canvas = tk.Canvas(listing, height=220, highlightthickness=0)
+        self.canvas = tk.Canvas(listing, height=80, highlightthickness=0)
         scrollbar = ttk.Scrollbar(listing, orient='vertical', command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side='right', fill='y')
@@ -56,8 +59,8 @@ class InstanceDialog:
         self.rows.bind('<Configure>', lambda event: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
         self.canvas.bind('<Configure>', lambda event: self.canvas.itemconfigure(embedded, width=event.width))
         self.message = tk.StringVar(value='Đang quét instance…')
-        ttk.Label(body, textvariable=self.message, wraplength=780).pack(anchor='w')
-        ttk.Label(body, text='Tạm dừng / Dừng tác vụ ngưng thao tác của tool; giả lập và game vẫn mở.', wraplength=780).pack(anchor='w', pady=4)
+        ttk.Label(body, textvariable=self.message, wraplength=520).pack(anchor='w')
+        ttk.Label(body, text='Tạm dừng / Dừng tác vụ ngưng thao tác của tool; giả lập và game vẫn mở.', wraplength=520).pack(anchor='w', pady=4)
         actions = ttk.Frame(body)
         actions.pack(fill='x', pady=(8,0))
         self.refresh = ttk.Button(actions, text='Làm mới', command=self.scan)
@@ -120,7 +123,7 @@ class InstanceDialog:
         if not selected:
             self.message.set('Hãy tích chọn ít nhất một instance.')
             return
-        package = self.app.package.get().strip()
+        package = PACKAGE
         started, skipped = [], []
         for instance in selected:
             session = self.app.sessions.instance(self.provider, instance)
@@ -215,7 +218,7 @@ class InstanceDialog:
                         session = self.app.sessions.instance(self.provider, instance)
                         if session.status == 'Sẵn sàng':
                             session.status = 'Đang chạy' if instance.running else 'Đã tắt'
-                        label = ttk.Label(row, text=session.state(), wraplength=480)
+                        label = ttk.Label(row, text=session.state(), wraplength=340)
                         label.pack(side='right', padx=10)
                         self.state_labels[instance.index] = label
                         self.checks.append(checked)
