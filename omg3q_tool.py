@@ -25,6 +25,7 @@ from level_skill import LevelDetector, LevelSkill, TeamLevelSkill
 from treasure_skill import TreasureDetector, TreasureSkill, TeamTreasureSkill
 from evolution_skill import EvolutionDetector, EvolutionSkill, TeamEvolutionSkill, KINDS
 from chest_skill import ChestDetector, ChestSkill
+from daily_tasks_skill import DailyTasksSkill
 
 
 TITLE = "OMG 3Q · Công cụ thao tác MuMu"
@@ -233,7 +234,14 @@ class App:
         ttk.Checkbutton(credential, text="Vào game sau xác thực", variable=self.enter_game).grid(row=1, column=2, columnspan=2, sticky="w", pady=(8, 0))
         ttk.Checkbutton(credential, text="Cho phép tích ô đồng ý điều khoản game", variable=self.accept_terms).grid(row=1, column=4, columnspan=2, sticky="w", pady=(8, 0))
 
-        dungeon = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Phó Bản", padding=8)
+        daily = ttk.LabelFrame(self.root, text="Sảnh chính · Nhiệm vụ hằng ngày", padding=8)
+        daily.pack(fill="x", padx=10, pady=(8, 0))
+        self.daily_tasks_button = ttk.Button(daily, text="Mở nhiệm vụ hằng ngày", command=self.run_daily_tasks)
+        self.daily_tasks_button.pack(side="left")
+        self.soul_hunt_button = ttk.Button(daily, text="Liệp Hồn 500 lần + Hồn Tướng", command=self.run_soul_hunt)
+        self.soul_hunt_button.pack(side="left", padx=(8, 0))
+
+        dungeon = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Phó Bản · Sao tối + dấu kiếm", padding=8)
         dungeon.pack(fill="x", padx=10, pady=(8, 0))
         dungeon_row = ttk.Frame(dungeon)
         dungeon_row.pack(fill="x")
@@ -494,11 +502,13 @@ class App:
                 parent=self.root)
             if again:
                 self.root.after_idle(self.run_dungeon)
-        elif result.status in {"error", "unknown", "timeout", "needs_samples", "existing_result", "auto_unverified", "retry_unverified"}:
+        elif result.status in {"error", "unknown", "timeout", "needs_samples", "existing_result", "auto_unverified", "retry_unverified", "scan_unverified", "no_frontier"}:
             messagebox.showwarning("Phó bản đã dừng", result.message +
                                    (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
 
     def _set_busy(self, value: bool, message: str | None = None) -> None:
+        self.daily_tasks_button.configure(state="disabled" if value else "normal")
+        self.soul_hunt_button.configure(state="disabled" if value else "normal")
         self.busy = value
         self.account_combo.configure(state="disabled" if value else "readonly")
         self.dungeon_button.configure(state="disabled" if value else "normal")
@@ -740,6 +750,38 @@ class App:
         self.status.set(result.message)
         if result.status in {"error","blocked","needs_samples"}:
             messagebox.showwarning(KINDS[kind]+" đã dừng", result.message +
+                (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
+
+    def run_daily_tasks(self):
+        self._run_daily_action(DailyTasksSkill.run)
+
+    def run_soul_hunt(self):
+        self._run_daily_action(DailyTasksSkill.run_soul_hunt)
+
+    def _run_daily_action(self, action):
+        if self.busy:
+            self.status.set("Đang thực hiện một thao tác khác.")
+            return
+        serial, package = self.serial.get().strip(), self.package.get().strip() or PACKAGE
+        self.stop_event.clear()
+
+        def work():
+            connect(self.adb, serial)
+            if foreground_package(self.adb, serial) != package:
+                raise AdbError("Hãy mở OMG 3Q và vào sảnh chính trước.")
+            device = AdbDevice(self.adb, serial, run_adb, input_text, package)
+            skill = DailyTasksSkill(device, stop=self.stop_event,
+                progress=lambda text: self.events.put(("progress", text, None)),
+                preview=lambda png: self.events.put(("frame", png, None)))
+            return action(skill)
+
+        self._worker(work, self._daily_tasks_complete)
+
+    def _daily_tasks_complete(self, result):
+        self.last_daily_tasks_result = result
+        self.status.set(result.message)
+        if result.status in {"error", "blocked", "needs_samples"}:
+            messagebox.showwarning("Nhiệm vụ hằng ngày đã dừng", result.message +
                 (f"\nẢnh kiểm tra: {result.screenshot}" if result.screenshot else ""))
 
     def run_chest(self):

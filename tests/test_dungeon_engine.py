@@ -87,6 +87,7 @@ class Detector:
         return np.full((24, 256), 255, dtype=np.uint8)
 
     same_stage = staticmethod(dungeon.DungeonDetector.same_stage)
+    viewport_motion = staticmethod(lambda before, after: 0.0)
 
     def map_identity(self, frame):
         mask = np.zeros((32, 256), np.uint8)
@@ -107,7 +108,7 @@ class DungeonTests(unittest.TestCase):
         return result, device
 
     def test_navigate_win_continue_then_defeat_stops_without_more_input(self):
-        result, device = self.run_engine([1, 2, 3, 4, 5, 0, 6, 6, 6, 0, 5, 0, 7, 7])
+        result, device = self.run_engine([1, 2, 3, 4, 4, 5, 0, 6, 6, 6, 0, 5, 0, 7, 7])
         self.assertEqual((result.status, result.wins), ("defeat", 1))
         names = ["time_machine", "dungeon_entry", "chapter_frontier", "stage_frontier", "fight", "next_stage", "fight"]
         indexes = list(dungeon.DungeonDetector.REGIONS)
@@ -118,11 +119,11 @@ class DungeonTests(unittest.TestCase):
         for spam in (False, True):
             screens = [5]
             for _ in range(9):
-                screens += [8, 8, 0, 4, 5]
-            screens += [8, 8, 0, 20, 20, 0, 4, 4, 5, 12, 12, 7, 7]
+                screens += [8, 8, 0, 4, 4, 5]
+            screens += [8, 8, 0, 20, 20, 0, 4, 4, 4, 4, 5, 12, 12, 7, 7]
             # End immediately at the first loss to avoid spending a retry budget.
             if spam:
-                screens += [0, 4, 5, 7, 7]
+                screens += [0, 4, 4, 5, 7, 7]
             result, device = self.run_engine(screens, spam=spam, spam_limit=1)
             self.assertEqual(result.status, "spam_limit" if spam else "defeat")
             self.assertEqual((result.wins, result.retries, result.battle_skips), (10, int(spam), 1))
@@ -132,13 +133,13 @@ class DungeonTests(unittest.TestCase):
             self.assertFalse(any(a[0] == "swipe" for a in device.actions))
 
     def test_start_on_completed_map_goes_to_next_chapter_without_counting_old_wins(self):
-        result, device = self.run_engine([20, 20, 4, 4, 5, 7, 7])
+        result, device = self.run_engine([20, 20, 4, 4, 4, 4, 5, 7, 7])
         self.assertEqual((result.status, result.wins), ("defeat", 0))
         self.assertEqual([a[1] for a in device.actions], [self.action_x(n) for n in
                          ("next_chapter", "stage_frontier", "fight")])
 
     def test_next_chapter_can_return_to_the_chapter_list(self):
-        result, device = self.run_engine([20, 20, 3, 3, 4, 5, 7, 7])
+        result, device = self.run_engine([20, 20, 3, 3, 4, 4, 5, 7, 7])
         self.assertEqual(result.status, "defeat")
         self.assertEqual([a[1] for a in device.actions], [self.action_x(n) for n in
                          ("next_chapter", "chapter_frontier", "stage_frontier", "fight")])
@@ -170,8 +171,8 @@ class DungeonTests(unittest.TestCase):
 
     def test_spam_loss_never_changes_chapter(self):
         result, device = self.run_engine([5, 7, 7, 0]+[20]*40, spam=True)
-        self.assertEqual((result.status, result.retries), ("timeout", 0))
-        self.assertNotIn(self.action_x("next_chapter"), [a[1] for a in device.actions])
+        self.assertEqual((result.status, result.retries), ("retry_unverified", 0))
+        self.assertNotIn(self.action_x("next_chapter"), [a[1] for a in device.actions if a[0] == "tap"])
 
     def test_real_chapter_button_detects_on_emulator_and_phone_without_dimmed_background(self):
         detector = dungeon.DungeonDetector()
@@ -184,7 +185,7 @@ class DungeonTests(unittest.TestCase):
         phone[:, -frame.shape[1]:] = frame
         self.assertIsNotNone(detector.find(phone, "next_chapter"))
 
-    def test_first_stage_swords_partly_hidden_by_map_title_keep_a_safe_npc_anchor(self):
+    def test_first_stage_dark_stars_below_map_title_keep_a_safe_npc_anchor(self):
         detector = dungeon.DungeonDetector()
         frame = detector.decode((Path(__file__).parent/"fixtures/dungeon/first_stage_marker.png").read_bytes())
         self.assertIsNotNone(detector.find(frame, "stage_screen"))
@@ -196,6 +197,16 @@ class DungeonTests(unittest.TestCase):
         self.assertTrue(145 <= x <= 205)
         self.assertTrue(200 <= target_y <= 285)
         self.assertIsNone(detector.find((frame*.4).astype(np.uint8), "stage_frontier"))
+
+    def test_next_chapter_lettering_matches_over_bright_statue_background(self):
+        detector=dungeon.DungeonDetector()
+        frame=detector.decode((Path(__file__).parent/"fixtures/dungeon/next_chapter_bright_background.png").read_bytes())
+        button=detector.find(frame,"next_chapter")
+        self.assertIsNotNone(button)
+        self.assertTrue(900 < button.center[0] < 960)
+        self.assertTrue(360 < button.center[1] < 405)
+        self.assertIsNone(detector.find((frame*.4).astype(np.uint8),"next_chapter"))
+        self.assertIsNone(detector.find(frame,"stage_frontier"))
 
     def test_repeated_win_screen_is_counted_once_and_continue_clicked_once(self):
         result, device = self.run_engine([5, 6, 6] + [6] * 30)
@@ -214,13 +225,13 @@ class DungeonTests(unittest.TestCase):
 
     def test_spam_retries_exactly_the_configured_number_and_stops_on_loss(self):
         result, device = self.run_engine(
-            [5, 7, 7, 0, 4, 5, 7, 7, 0, 4, 5, 7, 7], spam=True, spam_limit=2)
+            [5, 7, 7, 0, 4, 4, 5, 7, 7, 0, 4, 4, 5, 7, 7], spam=True, spam_limit=2)
         self.assertEqual((result.status, result.retries, result.stage_retries), ("spam_limit", 2, 2))
         self.assertEqual([a[1] for a in device.actions], [self.action_x(n) for n in
             ("fight", "result_exit", "stage_frontier", "fight", "result_exit", "stage_frontier", "fight")])
 
     def test_spam_default_stops_after_100_retries_not_101(self):
-        screens = [5, 7, 7] + [s for _ in range(100) for s in (0, 4, 5, 7, 7)]
+        screens = [5, 7, 7] + [s for _ in range(100) for s in (0, 4, 4, 5, 7, 7)]
         result, device = self.run_engine(screens, spam=True)
         self.assertEqual((result.status, result.retries, result.stage_retries), ("spam_limit", 100, 100))
         fights = [a for a in device.actions if a[1] == self.action_x("fight")]
@@ -228,7 +239,7 @@ class DungeonTests(unittest.TestCase):
 
     def test_spam_win_continues_and_resets_budget_for_next_stage(self):
         result, device = self.run_engine(
-            [5, 7, 7, 0, 4, 5, 6, 6, 0, 0, 5, 7, 7, 0, 4, 5, 7, 7],
+            [5, 7, 7, 0, 4, 4, 5, 6, 6, 0, 0, 5, 7, 7, 0, 4, 4, 5, 7, 7],
             spam=True, spam_limit=1)
         self.assertEqual((result.status, result.wins, result.retries, result.stage_retries),
                          ("spam_limit", 1, 2, 1))
@@ -240,30 +251,30 @@ class DungeonTests(unittest.TestCase):
                          [self.action_x("fight"), self.action_x("result_exit")])
 
     def test_explicit_new_spam_turn_can_start_from_a_previous_defeat(self):
-        result, device = self.run_engine([7, 7, 0, 4, 5, 7, 7], spam=True, spam_limit=1)
+        result, device = self.run_engine([7, 7, 0, 4, 4, 5, 7, 7], spam=True, spam_limit=1)
         self.assertEqual((result.status, result.retries), ("spam_limit", 1))
         self.assertEqual([a[1] for a in device.actions], [self.action_x(n) for n in
                          ("result_exit", "stage_frontier", "fight")])
 
     def test_retry_checks_auto_and_skips_for_each_new_battle(self):
-        result, device = self.run_engine([5, 12, 12, 7, 7, 0, 4, 5, 14, 14, 12, 12, 7, 7],
+        result, device = self.run_engine([5, 12, 12, 7, 7, 0, 4, 4, 5, 14, 14, 12, 12, 7, 7],
                                          spam=True, spam_limit=1)
         self.assertEqual((result.status, result.retries, result.auto_activations, result.battle_skips),
                          ("spam_limit", 1, 1, 2))
 
     def test_retry_native_quick_combat_can_bypass_the_fight_dialog(self):
-        result, device = self.run_engine([4, 12, 12, 7, 7, 0, 4, 12, 12, 12, 7, 7],
+        result, device = self.run_engine([4, 4, 12, 12, 7, 7, 0, 4, 4, 12, 12, 12, 7, 7],
                                          spam=True, spam_limit=1)
         self.assertEqual((result.status, result.retries, result.battle_skips), ("spam_limit", 1, 2))
         self.assertEqual([a[1] for a in device.actions], [self.action_x(n) for n in
                          ("stage_frontier", "battle_skip", "result_exit", "stage_frontier", "battle_skip")])
 
     def test_retry_instant_result_after_selecting_frontier_counts_once(self):
-        result, device = self.run_engine([4, 7, 7, 0, 4, 7, 7], spam=True, spam_limit=1)
+        result, device = self.run_engine([4, 4, 7, 7, 0, 4, 4, 7, 7], spam=True, spam_limit=1)
         self.assertEqual((result.status, result.retries), ("spam_limit", 1))
 
     def test_retry_rejected_fight_is_not_counted_without_combat_or_result(self):
-        result, device = self.run_engine([5, 7, 7, 0, 4] + [5]*30, spam=True)
+        result, device = self.run_engine([5, 7, 7, 0, 4, 4] + [5]*30, spam=True)
         self.assertEqual((result.status, result.retries), ("timeout", 0))
         self.assertEqual(len(device.actions), 4)
 
@@ -279,7 +290,7 @@ class DungeonTests(unittest.TestCase):
                 return Match(name, match.x+25, match.y, match.width, match.height, 1)
             return match
         detector.find = shifted_find
-        result, device = self.run_engine([4, 12, 12, 7, 7, 0, 4], detector=detector, spam=True)
+        result, device = self.run_engine([4, 4, 12, 12, 7, 7, 0, 4, 4], detector=detector, spam=True)
         self.assertEqual((result.status, result.retries), ("retry_unverified", 0))
         self.assertEqual(len(device.actions), 3)
 
@@ -289,23 +300,26 @@ class DungeonTests(unittest.TestCase):
             self.assertEqual((result.status, result.retries), ("retry_unverified", 0))
             self.assertEqual(len(device.actions), 2)
 
-    def test_retry_missing_frontier_never_scans_or_switches_map_even_after_win(self):
+    def test_retry_missing_frontier_sweeps_both_edges_and_never_switches_map(self):
         result, device = self.run_engine([5, 6, 6, 0, 0, 5, 7, 7, 0, 9], spam=True)
-        self.assertEqual((result.status, result.wins, result.retries), ("timeout", 1, 0))
-        self.assertFalse(any(a[0] == "swipe" for a in device.actions))
-        self.assertNotIn(self.action_x("map_back"), [a[1] for a in device.actions])
+        self.assertEqual((result.status, result.wins, result.retries), ("retry_unverified", 1, 0))
+        self.assertEqual(len(device.swipes), 9)
+        self.assertTrue(all(s[0] > s[2] for s in device.swipes[:3]))
+        self.assertTrue(all(s[0] < s[2] for s in device.swipes[3:6]))
+        self.assertTrue(all(s[0] > s[2] for s in device.swipes[6:]))
+        self.assertNotIn(self.action_x("map_back"), [a[1] for a in device.actions if a[0] == "tap"])
 
     def test_retry_missing_title_or_changed_stage_stops_before_fight(self):
         for changed in (None, np.zeros((24, 256), dtype=np.uint8)):
             detector = Detector()
             identities = iter((np.full((24, 256), 255, dtype=np.uint8), changed))
             detector.stage_identity = lambda frame: next(identities)
-            result, device = self.run_engine([5, 7, 7, 0, 4, 5], detector=detector, spam=True)
+            result, device = self.run_engine([5, 7, 7, 0, 4, 4, 5], detector=detector, spam=True)
             self.assertEqual((result.status, result.retries), ("retry_unverified", 0))
             self.assertEqual(len(device.actions), 3)
 
     def test_loss_hint_can_appear_late_without_using_a_retry(self):
-        result, device = self.run_engine([5, 18, 18, 18, 7, 0, 4, 5, 7, 7], spam=True, spam_limit=1)
+        result, device = self.run_engine([5, 18, 18, 18, 7, 0, 4, 4, 5, 7, 7], spam=True, spam_limit=1)
         self.assertEqual((result.status, result.retries), ("spam_limit", 1))
         self.assertEqual(len(device.actions), 4)
 
@@ -321,7 +335,7 @@ class DungeonTests(unittest.TestCase):
             self.assertFalse(device.actions)
 
     def test_stop_during_retry_navigation_prevents_the_next_fight(self):
-        stop, clock, device = threading.Event(), Clock(), Device([5, 7, 7, 0, 4, 5])
+        stop, clock, device = threading.Event(), Clock(), Device([5, 7, 7, 0, 4, 4, 5])
         dialogs = [0]
         def preview(png):
             if device.current == 5:
@@ -337,7 +351,7 @@ class DungeonTests(unittest.TestCase):
         self.assertEqual(len(device.actions), 3)
 
     def test_retry_win_respects_the_normal_win_limit(self):
-        result, device = self.run_engine([5, 7, 7, 0, 4, 5, 6, 6],
+        result, device = self.run_engine([5, 7, 7, 0, 4, 4, 5, 6, 6],
                                          spam=True, spam_limit=1, max_wins=1)
         self.assertEqual((result.status, result.wins, result.retries, result.stage_retries),
                          ("limit", 1, 1, 0))
@@ -385,17 +399,17 @@ class DungeonTests(unittest.TestCase):
         self.assertEqual(len(device.actions), 1)
 
     def test_reward_animation_can_delay_dismiss_hint_without_recounting_win(self):
-        result, device = self.run_engine([5, 11, 11, 11, 8, 0, 4, 5, 7, 7])
+        result, device = self.run_engine([5, 11, 11, 11, 8, 0, 4, 4, 5, 7, 7])
         self.assertEqual((result.status, result.wins), ("defeat", 1))
         self.assertEqual(len(device.actions), 4)
 
     def test_game_can_return_to_map_before_result_hint_is_observed(self):
-        result, device = self.run_engine([5, 11, 11, 0, 4, 5, 7, 7])
+        result, device = self.run_engine([5, 11, 11, 0, 4, 4, 5, 7, 7])
         self.assertEqual((result.status, result.wins), ("defeat", 1))
         self.assertEqual(len(device.actions), 3)
 
     def test_combat_can_start_directly_after_selecting_stage(self):
-        result, device = self.run_engine([4, 12, 12, 6, 6], max_wins=1)
+        result, device = self.run_engine([4, 4, 12, 12, 6, 6], max_wins=1)
         self.assertEqual((result.status, result.wins), ("limit", 1))
         self.assertEqual(len(device.actions), 2)  # Select the stage, then skip animation.
 
@@ -492,12 +506,12 @@ class DungeonTests(unittest.TestCase):
         self.assertIsNone(detector.find(frame,"battle_auto_off"))
 
     def test_event_intro_is_dismissed_before_opening_event_dungeon(self):
-        result, device = self.run_engine([1, 13, 2, 3, 4, 5, 7, 7])
+        result, device = self.run_engine([1, 13, 2, 3, 4, 4, 5, 7, 7])
         self.assertEqual(result.status, "defeat")
         self.assertEqual(len(device.actions), 6)
 
     def test_return_to_stage_map_after_win_starts_next_battle(self):
-        result, device = self.run_engine([5, 8, 8, 0, 4, 5, 7, 7])
+        result, device = self.run_engine([5, 8, 8, 0, 4, 4, 5, 7, 7])
         self.assertEqual((result.status, result.wins), ("defeat", 1))
         self.assertEqual(len(device.actions), 4)
 
@@ -524,7 +538,350 @@ class DungeonTests(unittest.TestCase):
         self.assertEqual(result.status, "no_frontier")
         self.assertEqual(device.actions, [("swipe",)] * 9)
         self.assertTrue(all(s[0] > s[2] for s in device.swipes[:3]))
-        self.assertTrue(all(s[0] < s[2] for s in device.swipes[3:]))
+        self.assertTrue(all(s[0] < s[2] for s in device.swipes[3:6]))
+        self.assertTrue(all(s[0] > s[2] for s in device.swipes[6:]))
+
+    def test_sweep_keeps_moving_past_old_three_swipe_limit_until_frontier_is_visible(self):
+        class LongMapDetector(Detector):
+            viewport_motion = staticmethod(lambda before, after: -120.0)
+        class LongMapDevice(Device):
+            def swipe(self, *args):
+                super().swipe(*args)
+                if len(self.swipes) == 11:
+                    self.screens = iter([4, 4, 4, 4, 5, 7, 7])
+        clock, device = Clock(), LongMapDevice([9])
+        engine = dungeon.DungeonEngine(device, detector=LongMapDetector(), clock=clock.now,
+            sleeper=clock.sleep, navigation_timeout=8)
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
+            with patch.object(dungeon, "ROOT", Path(folder)):
+                result = engine.run()
+        self.assertEqual(result.status, "defeat")
+        self.assertEqual(len(device.swipes), 11)
+        self.assertTrue(all(s[0] > s[2] for s in device.swipes))
+
+    def test_unknown_motion_never_counts_as_a_verified_map_edge(self):
+        class NoMotionEvidence(Detector):
+            viewport_motion = staticmethod(lambda before, after: None)
+        with patch.object(dungeon, "MAX_SCAN_PANS", 8):
+            result, device = self.run_engine([9], detector=NoMotionEvidence())
+        self.assertEqual(result.status, "scan_unverified")
+        self.assertEqual(len(device.swipes), 8)
+        self.assertTrue(all(s[0] > s[2] for s in device.swipes))
+
+    def test_sweep_confirms_each_edge_on_three_different_drag_lanes(self):
+        sweep = dungeon.MapSweep()
+        frame = np.zeros((90,160,3),np.uint8)
+        for _ in range(12):
+            sweep.sent(frame);sweep.observe(frame, lambda a,b:-90.0)
+            self.assertFalse(sweep.complete)
+            self.assertFalse(sweep.edges)
+        used=[]
+        for _ in range(3):
+            used.append(sweep.lane);sweep.sent(frame);sweep.observe(frame,lambda a,b:0.0)
+        self.assertEqual(used,list(dungeon.PAN_LANES))
+        self.assertEqual((sweep.direction,sweep.edges),("earlier",{"later"}))
+        for _ in range(10):
+            sweep.sent(frame);sweep.observe(frame,lambda a,b:90.0)
+            self.assertFalse(sweep.complete)
+        for _ in range(3):
+            sweep.sent(frame);sweep.observe(frame,lambda a,b:0.0)
+        self.assertFalse(sweep.complete)
+        self.assertEqual(sweep.direction,"later")
+        self.assertTrue(sweep.final_return)
+        for _ in range(3):
+            sweep.sent(frame);sweep.observe(frame,lambda a,b:-90.0)
+        for _ in range(3):
+            sweep.sent(frame);sweep.observe(frame,lambda a,b:0.0)
+        self.assertTrue(sweep.complete)
+
+    def test_viewport_motion_measures_map_translation_and_rejects_featureless_frames(self):
+        detector = dungeon.DungeonDetector()
+        image = np.random.default_rng(11).integers(0,256,(597,1061,3),np.uint8)
+        moved = cv2.warpAffine(image,np.float32([[1,0,-140],[0,1,0]]),(1061,597))
+        self.assertAlmostEqual(detector.viewport_motion(image,moved),-140,delta=3)
+        self.assertAlmostEqual(detector.viewport_motion(image,image.copy()),0,delta=1)
+        blank = np.zeros_like(image)
+        self.assertIsNone(detector.viewport_motion(blank,blank))
+
+    def test_dark_stars_recognize_final_boss_against_different_scenery(self):
+        detector = dungeon.DungeonDetector()
+        frame = detector.decode((Path(__file__).parent/"fixtures/dungeon/final_boss_new_background.png").read_bytes())
+        marker = detector.find(frame,"stage_frontier")
+        self.assertIsNotNone(marker)
+        self.assertGreaterEqual(marker.score,.94)
+        self.assertTrue(790 < marker.center[0] < 860)
+        self.assertIsNone(detector.find((frame*.4).astype(np.uint8),"stage_frontier"))
+
+    def test_unplayed_stars_still_find_npc_when_swords_are_outside_screen(self):
+        detector = dungeon.DungeonDetector()
+        frame = detector.decode((Path(__file__).parent/"fixtures/dungeon/mostly_clipped_swords.png").read_bytes())
+        marker = detector.find(frame,"stage_frontier")
+        self.assertIsNotNone(marker)
+        self.assertEqual(marker.name,"stage_unplayed_stars")
+        x,y=marker.center
+        self.assertTrue(790 < x < 860)
+        self.assertTrue(95 < y+marker.height*(145/44) < 155)
+        self.assertIsNone(detector.find((frame*.4).astype(np.uint8),"stage_frontier"))
+        ambiguous=frame.copy()
+        ambiguous[100:162,350:429]=frame[3:65,783:862]
+        self.assertIsNone(detector.find(ambiguous,"stage_frontier"))
+        completed=frame.copy()
+        crop=completed[3:31,783:809]
+        dark=cv2.cvtColor(crop,cv2.COLOR_BGR2HSV)[:,:,2] < 100
+        crop[dark]=(0,220,255)
+        self.assertIsNone(detector.find(completed,"stage_frontier"))
+
+    def test_empty_stars_select_the_same_npc_after_swords_are_erased(self):
+        detector=dungeon.DungeonDetector()
+        folder=Path(__file__).parent/"fixtures/dungeon"
+        for name,box in (("first_stage_marker",(128,40,215,108)),
+                         ("final_boss_new_background",(783,130,865,199)),
+                         ("stage10_top_clipped",(730,0,811,26))):
+            with self.subTest(screen=name):
+                frame=detector.decode((folder/(name+".png")).read_bytes())
+                original=detector.find(frame,"stage_frontier")
+                self.assertIsNotNone(original)
+                x1,y1,x2,y2=box
+                frame[y1:y2,x1:x2]=0
+                marker=detector.find(frame,"stage_frontier")
+                self.assertIsNotNone(marker)
+                self.assertEqual(marker.name,"stage_unplayed_stars")
+                self.assertLessEqual(abs(marker.center[0]-original.center[0]),3)
+                self.assertLessEqual(abs(marker.center[1]-original.center[1]),3)
+
+    def test_hoang_cai_three_empty_stars_match_without_green_background_template(self):
+        detector=dungeon.DungeonDetector()
+        frame=detector.decode((Path(__file__).parent/"fixtures/dungeon/hoang_cai_green_stars.png").read_bytes())
+        marker=detector.find(frame,"stage_frontier")
+        self.assertIsNotNone(marker)
+        self.assertEqual(marker.name,"stage_unplayed_stars")
+        self.assertTrue(725 < marker.center[0] < 765)
+        self.assertTrue(235 < marker.center[1]+marker.height*(145/44) < 275)
+        # The stage's sword animation can be absent without moving the target.
+        frame[70:134,700:790]=0
+        without_swords=detector.find(frame,"stage_frontier")
+        self.assertIsNotNone(without_swords)
+        self.assertLessEqual(abs(marker.center[0]-without_swords.center[0]),3)
+        self.assertLessEqual(abs(marker.center[1]-without_swords.center[1]),3)
+        self.assertIsNone(detector.find((frame*.4).astype(np.uint8),"stage_frontier"))
+
+    def test_geometry_still_rejects_a_gold_star_and_multiple_empty_rows(self):
+        detector=dungeon.DungeonDetector()
+        frame=detector.decode((Path(__file__).parent/"fixtures/dungeon/hoang_cai_green_stars.png").read_bytes())
+        completed=frame.copy()
+        first=completed[134:162,705:732]
+        first[cv2.cvtColor(first,cv2.COLOR_BGR2GRAY)<55]=(0,220,255)
+        self.assertIsNone(detector._unplayed_frontier(completed))
+        frame[200:260,350:429]=frame[134:194,705:784]
+        self.assertIsNone(detector._unplayed_frontier(frame))
+
+    def test_geometry_handles_brown_background_on_next_hoang_cai_stage(self):
+        detector=dungeon.DungeonDetector()
+        frame=detector.decode((Path(__file__).parent/"fixtures/dungeon/hoang_cai_4_stars.png").read_bytes())
+        marker=detector.find(frame,"stage_frontier")
+        self.assertIsNotNone(marker)
+        self.assertEqual(marker.name,"stage_unplayed_stars")
+        self.assertTrue(800 < marker.center[0] < 845)
+        self.assertTrue(200 < marker.center[1]+marker.height*(145/44) < 245)
+
+    def test_textured_character_colors_cannot_replace_empty_star_fill(self):
+        detector=dungeon.DungeonDetector()
+        frame=detector.decode((Path(__file__).parent/"fixtures/dungeon/hoang_cai_green_stars.png").read_bytes())
+        texture=np.indices((9,10)).sum(axis=0)%2*100
+        for x in (713,739,765):
+            frame[144:153,x:x+10]=np.repeat(texture[:,:,None],3,axis=2)
+        self.assertIsNone(detector._unplayed_frontier(frame))
+
+    def test_translucent_star_over_a_statue_is_not_rejected_as_character_art(self):
+        detector=dungeon.DungeonDetector()
+        frame=detector.decode((Path(__file__).parent/"fixtures/dungeon/hoang_cai_6_stars.png").read_bytes())
+        marker=detector.find(frame,"stage_frontier")
+        self.assertIsNotNone(marker)
+        self.assertEqual(marker.name,"stage_unplayed_stars")
+        self.assertTrue(800 < marker.center[0] < 845)
+        self.assertTrue(345 < marker.center[1]+marker.height*(145/44) < 385)
+
+    def test_dark_fence_above_stars_does_not_invalidate_empty_fill(self):
+        detector=dungeon.DungeonDetector()
+        frame=detector.decode((Path(__file__).parent/"fixtures/dungeon/chu_thai_mixed_background.png").read_bytes())
+        marker=detector.find(frame,"stage_frontier")
+        self.assertIsNotNone(marker)
+        self.assertEqual(marker.name,"stage_unplayed_stars")
+        self.assertTrue(800 < marker.center[0] < 845)
+        self.assertTrue(310 < marker.center[1]+marker.height*(145/44) < 350)
+
+    def test_glowing_swords_recover_stage_when_empty_stars_are_unclear(self):
+        detector=dungeon.DungeonDetector()
+        frame=detector.decode((Path(__file__).parent/"fixtures/dungeon/revealed_glow.png").read_bytes())
+        self.assertIsNotNone(detector.find(frame,"stage_screen"))
+        self.assertIsNone(detector._unplayed_frontier(frame))
+        marker=detector.find(frame,"stage_frontier")
+        self.assertIsNotNone(marker)
+        self.assertEqual(marker.name,"stage_swords")
+        self.assertTrue(790 < marker.center[0] < 860)
+        self.assertIsNone(detector.find((frame*.4).astype(np.uint8),"stage_frontier"))
+
+    def test_star_fallback_waits_for_second_observation_before_input(self):
+        class StarsDetector(Detector):
+            SCREENS={**Detector.SCREENS,29:{"stage_screen","stage_frontier"}}
+            def find(self,frame,name,threshold=.87):
+                match=super().find(frame,name,threshold)
+                if match and name=="stage_frontier" and int(frame[0,0,0])==29:
+                    return Match("stage_unplayed_stars",match.x,match.y,match.width,match.height,match.score)
+                return match
+        result,device=self.run_engine([29]+[0]*30,detector=StarsDetector())
+        self.assertEqual(result.status,"timeout")
+        self.assertFalse(device.actions)
+        result,device=self.run_engine([29,29,5,7,7],detector=StarsDetector())
+        self.assertEqual(result.status,"defeat")
+        self.assertEqual(len(device.actions),2)
+
+    def test_sword_fallback_requires_two_frames_and_also_works_for_spam(self):
+        class SwordDetector(Detector):
+            SCREENS={**Detector.SCREENS,29:{"stage_screen","stage_frontier"}}
+            def find(self,frame,name,threshold=.87):
+                marker=super().find(frame,name,threshold)
+                if marker and name=="stage_frontier":
+                    return Match("stage_swords",marker.x,marker.y,marker.width,marker.height,.99)
+                return marker
+        result,device=self.run_engine([29]+[0]*30,detector=SwordDetector())
+        self.assertEqual(result.status,"timeout")
+        self.assertFalse(device.actions)
+        result,device=self.run_engine([29,29,5,7,7,0,29,29,5,7,7],
+            detector=SwordDetector(),spam=True,spam_limit=1)
+        self.assertEqual((result.status,result.retries),("spam_limit",1))
+        self.assertEqual(len(device.actions),5)
+
+    def test_disagreeing_stars_and_swords_wait_for_a_clear_target(self):
+        detector=dungeon.DungeonDetector()
+        frame=np.zeros((597,1061,3),np.uint8)
+        screen=Match("stage_screen",980,530,50,50,1)
+        stars=Match("stage_unplayed_stars",150,100,79,44,.99)
+        swords=Match("stage_swords",650,100,58,44,.99)
+        with patch.object(detector,"_find_template",return_value=screen), \
+             patch.object(detector,"_unplayed_frontier",return_value=stars), \
+             patch.object(detector,"_sword_frontier",return_value=swords):
+            self.assertIsNone(detector.find(frame,"stage_frontier"))
+        swords=Match("stage_swords",160,105,58,44,.99)
+        with patch.object(detector,"_find_template",return_value=screen), \
+             patch.object(detector,"_unplayed_frontier",return_value=stars), \
+             patch.object(detector,"_sword_frontier",return_value=swords):
+            self.assertEqual(detector.find(frame,"stage_frontier"),stars)
+
+    def test_empty_stars_remain_detectable_when_fire_brightens_their_fill(self):
+        detector=dungeon.DungeonDetector()
+        frame=detector.decode((Path(__file__).parent/"fixtures/dungeon/empty_stars_fire_glow.png").read_bytes())
+        marker=detector.find(frame,"stage_frontier")
+        self.assertIsNotNone(marker)
+        self.assertEqual(marker.name,"stage_unplayed_stars")
+        self.assertGreater(marker.score,.95)
+        self.assertTrue(790 < marker.center[0] < 860)
+
+    def test_top_clipped_empty_stars_find_final_boss_without_swords(self):
+        detector=dungeon.DungeonDetector()
+        frame=detector.decode((Path(__file__).parent/"fixtures/dungeon/top_clipped_empty_stars.png").read_bytes())
+        marker=detector.find(frame,"stage_frontier")
+        self.assertIsNotNone(marker)
+        self.assertEqual(marker.name,"stage_unplayed_stars")
+        self.assertTrue(710 < marker.center[0] < 760)
+        self.assertTrue(90 < marker.center[1]+marker.height*(145/44) < 130)
+        # A row with one earned star must never be treated as the frontier.
+        completed=frame.copy()
+        crop=completed[:16,696:722]
+        dark=cv2.cvtColor(crop,cv2.COLOR_BGR2HSV)[:,:,2] < 100
+        crop[dark]=(0,220,255)
+        self.assertIsNone(detector._unplayed_frontier(completed))
+
+    def test_left_pan_reveals_frontier_and_requires_two_fresh_observations(self):
+        class RevealDevice(Device):
+            def swipe(self, *args):
+                super().swipe(*args)
+                self.screens = iter([4, 4, 4, 4, 5, 12, 12, 7, 7])
+        clock, device = Clock(), RevealDevice([9])
+        engine = dungeon.DungeonEngine(device, detector=Detector(), clock=clock.now,
+            sleeper=clock.sleep, navigation_timeout=8, battle_timeout=12)
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
+            with patch.object(dungeon, "ROOT", Path(folder)):
+                result = engine.run()
+        self.assertEqual((result.status, result.battle_skips), ("defeat", 1))
+        self.assertEqual(len(device.swipes), 1)
+        self.assertGreater(device.swipes[0][0], device.swipes[0][2])
+        self.assertEqual(device.actions[0], ("swipe",))
+        self.assertEqual([a[1] for a in device.actions if a[0] == "tap"],
+                         [self.action_x(n) for n in ("stage_frontier", "fight", "battle_skip")])
+
+    def test_spam_pan_accepts_relocated_frontier_in_same_map_only(self):
+        class ShiftedDetector(Detector):
+            SCREENS = {**Detector.SCREENS, 28: {"stage_screen", "stage_frontier"}}
+            def find(self, frame, name, threshold=.87):
+                match = super().find(frame, name, threshold)
+                if match and name == "stage_frontier" and int(frame[0,0,0]) == 28:
+                    return Match(name, match.x+25, match.y, match.width, match.height, match.score)
+                return match
+        for changed_map in (False, True):
+            class RevealDevice(Device):
+                def swipe(self, *args):
+                    super().swipe(*args)
+                    self.screens = iter([25] if changed_map else [28, 28, 5, 12, 12, 7, 7])
+            clock, device = Clock(), RevealDevice([4, 4, 5, 7, 7, 0, 9])
+            engine = dungeon.DungeonEngine(device, detector=ShiftedDetector(), clock=clock.now,
+                sleeper=clock.sleep, navigation_timeout=8, battle_timeout=12)
+            with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
+                with patch.object(dungeon, "ROOT", Path(folder)):
+                    result = engine.run(spam=True, spam_limit=1)
+            self.assertEqual(len(device.swipes), 1)
+            self.assertEqual((result.status, result.retries),
+                             ("retry_unverified", 0) if changed_map else ("spam_limit", 1))
+            taps = [a[1] for a in device.actions if a[0] == "tap"]
+            self.assertEqual(taps.count(self.action_x("fight")), 1 if changed_map else 2)
+
+    def test_one_frame_marker_after_pan_does_not_trigger_a_stage_click(self):
+        class FlashDevice(Device):
+            def swipe(self, *args):
+                super().swipe(*args)
+                self.screens = iter([4, 0]*30)
+        clock, device = Clock(), FlashDevice([9])
+        engine = dungeon.DungeonEngine(device, detector=Detector(), clock=clock.now,
+            sleeper=clock.sleep, navigation_timeout=8)
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
+            with patch.object(dungeon, "ROOT", Path(folder)):
+                result = engine.run()
+        self.assertEqual(result.status, "timeout")
+        self.assertEqual(device.actions, [("swipe",)])
+
+    def test_stop_in_pan_progress_callback_prevents_swipe(self):
+        stop, clock, device = threading.Event(), Clock(), Device([9])
+        def progress(message):
+            if "kéo map sang trái" in message:
+                stop.set()
+        engine = dungeon.DungeonEngine(device, detector=Detector(), stop=stop,
+            clock=clock.now, sleeper=clock.sleep, progress=progress)
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
+            with patch.object(dungeon, "ROOT", Path(folder)):
+                result = engine.run()
+        self.assertEqual(result.status, "cancelled")
+        self.assertFalse(device.actions)
+
+    def test_real_occlusion_left_pan_and_both_animation_phases(self):
+        detector = dungeon.DungeonDetector()
+        folder = Path(__file__).parent/"fixtures/dungeon"
+        before = detector.decode((folder/"occluded_before_pan.png").read_bytes())
+        self.assertIsNotNone(detector.find(before, "stage_screen"))
+        self.assertIsNone(detector.find(before, "stage_frontier"))
+        identities = [detector.map_identity(before)]
+        markers = []
+        for name in ("revealed_cross", "revealed_split"):
+            frame = detector.decode((folder/f"{name}.png").read_bytes())
+            marker = detector.find(frame, "stage_frontier")
+            self.assertIsNotNone(marker)
+            self.assertEqual(marker.height, 44)
+            self.assertIsNone(detector.find((frame*.4).astype(np.uint8), "stage_frontier"))
+            markers.append(marker)
+            identities.append(detector.map_identity(frame))
+        self.assertLessEqual(abs(markers[0].center[0]-markers[1].center[0]), 2)
+        self.assertLessEqual(abs(markers[0].center[1]-markers[1].center[1]), 8)
+        self.assertTrue(all(i is not None for i in identities))
+        self.assertTrue(all(detector.same_stage(identities[0], i) for i in identities[1:]))
 
     def test_missing_marker_after_win_never_leaves_unfinished_map(self):
         result, device = self.run_engine([5, 8, 8, 0]+[9]*70)
@@ -538,7 +895,7 @@ class DungeonTests(unittest.TestCase):
             def swipe(self, *args):
                 super().swipe(*args)
                 if args[0] < args[2]:
-                    self.screens = iter([4, 5, 7, 7])
+                    self.screens = iter([4, 4, 4, 4, 5, 7, 7])
         clock, device = Clock(), ReversedDevice([9])
         engine = dungeon.DungeonEngine(device, detector=Detector(), clock=clock.now,
             sleeper=clock.sleep, navigation_timeout=8, battle_timeout=12)
@@ -571,7 +928,7 @@ class DungeonTests(unittest.TestCase):
             self.assertEqual(result.status, "timeout")
             self.assertFalse(device.actions)
 
-    def test_real_stage10_top_clipped_swords_restore_correct_npc_target(self):
+    def test_real_stage10_dark_stars_restore_correct_npc_target(self):
         detector = dungeon.DungeonDetector()
         frame = detector.decode((Path(__file__).parent/"fixtures/dungeon/stage10_top_clipped.png").read_bytes())
         self.assertIsNotNone(detector.find(frame, "stage_screen"))
@@ -590,19 +947,21 @@ class DungeonTests(unittest.TestCase):
         frame[:65, 700:840] = 0
         self.assertIsNone(detector.find(frame, "stage_frontier"))
 
-    def test_clipped_swords_anchor_tracks_how_much_of_the_icon_is_outside_frame(self):
-        detector = dungeon.DungeonDetector()
-        template = detector.templates["stage_frontier"]
-        th, tw = template.shape
-        for cut in (10, 18, 24):
-            frame = np.zeros((597, 1061, 3), np.uint8)
-            frame[:th-cut, 500:500+tw] = cv2.cvtColor(template[cut:], cv2.COLOR_GRAY2BGR)
-            marker = detector.find(frame, "stage_frontier")
+    def test_swords_can_find_stage_when_all_stars_are_unreadable(self):
+        detector=dungeon.DungeonDetector()
+        base=detector.decode((Path(__file__).parent/"fixtures/dungeon/final_boss_new_background.png").read_bytes())
+        template=cv2.imdecode(np.frombuffer((dungeon.ROOT/"assets/dungeon/stage_frontier.png").read_bytes(),np.uint8),0)
+        th,tw=template.shape
+        for cut in (0,10,18,24):
+            frame=np.zeros_like(base)
+            frame[520:,950:]=base[520:,950:]  # Map context, but no empty stars.
+            frame[:th-cut,500:500+tw]=cv2.cvtColor(template[cut:],cv2.COLOR_GRAY2BGR)
+            self.assertIsNotNone(detector.find(frame,"stage_screen"))
+            marker=detector.find(frame,"stage_frontier")
             self.assertIsNotNone(marker)
-            self.assertLessEqual(abs(marker.center[1] - (th/2-cut)), 2)
-        frame = np.zeros((597, 1061, 3), np.uint8)
-        frame[40:40+th-18, 500:500+tw] = cv2.cvtColor(template[18:], cv2.COLOR_GRAY2BGR)
-        self.assertIsNone(detector.find(frame, "stage_frontier"))
+            self.assertEqual(marker.name,"stage_swords")
+            self.assertLessEqual(abs(marker.center[1]-(th/2-cut)),2)
+            self.assertIsNone(detector.find((frame*.4).astype(np.uint8),"stage_frontier"))
 
     def test_decoder_preserves_ui_shape_on_phone_and_emulator(self):
         for width, height in ((1280, 597), (1920, 1080)):
@@ -630,17 +989,20 @@ class DungeonTests(unittest.TestCase):
             self.assertIsNotNone(detector.find(frame, name))
             self.assertIsNone(detector.find(frame, other))
 
-    def test_marker_variants_keep_the_same_tap_anchor_height(self):
+    def test_sword_templates_load_but_never_select_without_map_context(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
-            path = Path(folder)
-            template = np.random.default_rng(4).integers(0, 255, (63, 63), dtype=np.uint8)
-            (path / "stage_frontier__example.png").write_bytes(cv2.imencode(".png", template)[1].tobytes())
-            detector = dungeon.DungeonDetector(path)
-            frame = np.zeros((597, 1280, 3), np.uint8)
-            frame[120:183, 300:363] = cv2.cvtColor(template, cv2.COLOR_GRAY2BGR)
-            match = detector.find(frame, "stage_frontier")
-            self.assertEqual(match.height, 44)
-            self.assertLessEqual(abs(match.center[1] - 151), 1)
+            path=Path(folder)
+            template=np.random.default_rng(4).integers(0,255,(63,63),dtype=np.uint8)
+            for name in ("stage_frontier", "stage_frontier__example", "stage_frontier_tip"):
+                (path/(name+".png")).write_bytes(cv2.imencode(".png",template)[1].tobytes())
+            detector=dungeon.DungeonDetector(path)
+            self.assertIn("stage_frontier",detector.templates)
+            self.assertIn("stage_frontier_tip",detector.templates)
+            self.assertEqual(len(detector.scaled["stage_frontier"]),14)
+            frame=np.zeros((597,1061,3),np.uint8)
+            frame[120:183,300:363]=cv2.cvtColor(template,cv2.COLOR_GRAY2BGR)
+            self.assertIsNone(detector.find(frame,"stage_frontier"))
+
 
 
 if __name__ == "__main__":

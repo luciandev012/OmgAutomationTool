@@ -23,11 +23,37 @@ Danh sách rỗng dừng với trạng thái `needs_character`. Màn hình lạ 
 và ghi ảnh chẩn đoán đã che vùng thông tin đăng nhập trong `runtime/`.
 Tool không tự thử lại mật khẩu khi xác thực không thành công.
 
+## Nhiệm vụ hằng ngày ở sảnh chính
+
+Trong nhóm **Sảnh chính · Nhiệm vụ hằng ngày**, bấm **Mở nhiệm vụ hằng ngày**.
+Luồng độc lập trong `daily_tasks_skill.py`, dùng đúng thiết bị ADB đang chọn;
+không gọi điều hướng hay các kỹ năng của Cỗ Máy Thời Gian.
+
+- Xác nhận sảnh chính bằng hai biểu tượng riêng của sảnh, nhận diện icon cuộn
+  giấy Nhiệm vụ ở góc trên bên phải và mở một lần. Vị trí chạm lấy từ ảnh đang
+  quan sát, co theo độ phân giải thiết bị.
+- Nếu đang ở tab Thành tựu, chuyển sang Nhiệm vụ; nếu đã mở đúng bảng thì xác
+  nhận lại và giữ nguyên. Mỗi màn hình được xác nhận qua hai ảnh.
+- Bước đầu chỉ điều hướng và dừng ở bảng Nhiệm vụ. Chưa bấm Nhận, Đến, Nhận
+  nhanh, rương mốc hay Năng động Điểm danh. Các kỹ năng thực hiện từng nhiệm
+  vụ sẽ được thêm theo hướng dẫn tiếp theo của người dùng.
+- Ở Cỗ Máy Thời Gian hoặc màn hình chưa nhận diện thì dừng và yêu cầu về sảnh
+  chính. Không tự gọi nâng tướng hay vượt phó bản của sự kiện.
+- Dùng chung nút Dừng và cơ chế chỉ chạy một thao tác của giao diện. Nếu bảng
+  không mở, không bấm lại icon liên tục. Kết quả/ảnh lưu trong
+  `runtime/daily_tasks/<lượt chạy>/`.
+
+Đã kiểm tra 13 trường hợp riêng cho luồng mở bảng, gồm tab Thành tựu, đã mở
+sẵn, ảnh lóe, bảng không chuyển, màn lạ, dừng/hủy và tỉ lệ ảnh ngang khác nhau.
+Đã thử qua luồng worker/GUI thật trên MuMu ở cả ba điểm bắt đầu: sảnh chính,
+Thành tựu và bảng đã mở sẵn; không gửi thao tác nhiệm vụ hay thưởng. Biên bản:
+`runtime/daily_tasks/gui_verification.json`; ảnh `verified_page.png`.
+
 ## Phó bản Cỗ Máy Thời Gian
 
 Nút **Tự động vượt phó bản** dùng phiên nhân vật đang mở trong game. Không cần
 tạo kịch bản bấm tay. Đường đi: Cỗ Máy Thời Gian → Phó Bản của sự kiện → map có
-dấu hai thanh kiếm → ải có dấu hai thanh kiếm → Chiến.
+dấu hai thanh kiếm → ải có **ba sao tối hoặc dấu kiếm Chiến** → Chiến.
 
 `dungeon_engine.py` nhận diện theo ảnh, giữ đúng hình dạng biểu tượng khi thay đổi
 tỉ lệ màn hình. Các mẫu giao diện nằm trong `assets/dungeon/` và chỉ chứa vùng
@@ -44,10 +70,15 @@ nút/biểu tượng, không chứa thông tin tài khoản trong ảnh gốc.
   thoại **Đã hết lượt spam**. Chọn **Có** để chạy một lượt mới với số lần đã đặt;
   chọn **Không** để dừng. Tool không tự mở lượt mới khi chưa có lựa chọn của bạn.
   Cũng có thể bấm lại **Tự động vượt phó bản** sau đó để bắt đầu lượt mới.
-- Sau khi thua, tool đóng kết quả, chọn lại dấu kiếm tại vị trí ải đang mở trên
+- Sau khi thua, tool đóng kết quả, chọn lại ải bằng sao tối hoặc dấu kiếm tại vị trí đang mở trên
   cùng map; không dò sang map khác. Nếu có bảng Chiến thì đối chiếu tên ải với
   trận trước. Hỗ trợ game vào trận ngay khi chọn ải. Vị trí ải thay đổi, tên không
   khớp hoặc không xác nhận được đường quay lại sẽ dừng với `retry_unverified`.
+- Nếu cả sao tối và dấu kiếm bị khuất khi đánh lại, quét tới hai mép để tìm lại, giữ nguyên
+  cùng chương. Sau khi kéo, kiểm tra tên map giữ nguyên và nhận diện dấu hiệu ải ở vị
+  trí mới qua hai ảnh liên tiếp; vị trí màn hình được phép đổi vì map đã cuộn.
+  Nếu không thực hiện kéo, kiểm tra vị trí cũ vẫn áp dụng. Nhánh này không bấm
+  Chương kế, không tiêu lượt Spam chỉ vì kéo map hoặc nhìn thấy sao.
 - `Dừng sau số ải thắng = 0`: không giới hạn số trận thắng. Số lớn hơn 0 giới hạn
   số trận thắng trong lần chạy này, kể cả khi bật Spam. Nút Dừng dùng chung với
   đăng nhập và có thể dừng giữa lượt spam.
@@ -67,22 +98,141 @@ nút/biểu tượng, không chứa thông tin tài khoản trong ảnh gốc.
 - Chờ bảng thưởng và vùng chạm đóng kết quả xuất hiện đầy đủ; cũng xử lý được
   trường hợp game tự về map hoặc chuyển thẳng vào trận.
 - Sau ải 10, nhận diện **Chương kế** trên map và bấm một lần để sang chương mới.
-  Không cần đủ 30/30 sao. Tool chờ tên map thay đổi ổn định rồi chọn dấu kiếm của
+  Không cần đủ 30/30 sao. Tool chờ tên map thay đổi ổn định rồi chọn dấu hiệu của
   ải đầu tiên; cũng hỗ trợ trường hợp nút đưa về danh sách map. Có thể chạy tool
   ngay trên map đã hoàn thành đang hiện Chương kế. Nếu map cũ vẫn đứng yên sau
   khi bấm, tool dừng theo thời gian chờ, không bấm lặp hoặc chọn lại boss cũ.
-- Dấu kiếm của ải 1 có thể bị thanh tên map che phần dưới. Tool nhận diện phần
-  lưỡi kiếm còn lộ phía trên và giữ điểm chạm vào nhân vật, thay vì thanh tiêu đề.
-- Khi không thấy ải đang mở, tool chờ ảnh mới và quét map theo cả hai chiều:
-  tối đa 3 lần về phía ải sau, rồi tối đa 6 lần ngược lại để phủ phần đầu map.
-  Ảnh từng vùng được lưu ở `runtime/dungeon_scan/scan_00.png` đến `scan_09.png`.
-  Không suy ra đã hoàn thành chương từ việc mất dấu kiếm; chỉ chuyển chương khi
+- Ở ải 1, dùng sao tối dưới thanh tên map hoặc phần đầu kiếm còn lộ để chọn nhân vật.
+- Khi không thấy ải đang mở, tool chờ ảnh mới và quét map theo cả hai chiều.
+  Không dùng số lần kéo cố định để kết luận đã quét hết: so khớp các điểm trên
+  cảnh map để đo dịch chuyển thật sau mỗi lần kéo. Còn dịch chuyển thì tiếp tục
+  cùng chiều; ba điểm kéo khác nhau đều không di chuyển mới xác nhận tới mép.
+  Sau mép cuối, quét ngược tới mép đầu nếu vẫn chưa tìm được ải, rồi quay lại
+  kiểm tra phía phải lần cuối. Lượt quét không tìm được ải kết thúc ở bên phải,
+  không kéo ngược về đầu map rồi hiện popup như bản trước.
+  Ưu tiên kéo map sang trái để làm lộ hàng sao bị che ở phía bên phải. Sau mỗi
+  lần kéo, chụp lại và xác nhận sao tối/dấu kiếm ổn định qua hai ảnh trước khi chọn ải.
+  Ảnh từng vùng được lưu ở `runtime/dungeon_scan/scan_XX.png`.
+  Không suy ra đã hoàn thành chương từ việc không thấy sao tối hoặc dấu kiếm; chỉ chuyển chương khi
   xác nhận nút **Chương kế**. Nếu vẫn không tìm thấy, giữ nguyên map để kiểm tra.
-- Với dấu kiếm bị cắt ở mép trên (thường gặp ở boss ải 10), nhận diện phần biểu
-  tượng còn nhìn thấy với ngưỡng chặt, khôi phục vị trí đầy đủ và xác nhận qua hai
+- Với hàng sao bị cắt ở mép trên (thường gặp ở boss ải 10), nhận diện phần sao
+  còn nhìn thấy với ngưỡng chặt, khôi phục vị trí đầy đủ và xác nhận qua hai
   ảnh liên tiếp trước khi chọn nhân vật. Ảnh lóe đơn lẻ, ứng viên đổi vị trí hoặc
   nền bị làm tối phía sau bảng thông báo không được dùng để chọn ải.
 - Ảnh cuối lần chạy được lưu cục bộ ở `runtime/dungeon_last_screen.png`.
+- Kết hợp **ba sao tối hoặc dấu kiếm Chiến** để tìm ải đang mở. Sao tối rõ thì
+  dùng sao; khi nền khiến sao khó nhận, dấu kiếm là tín hiệu độc lập để tiếp tục.
+  Khôi phục mẫu kiếm đầy đủ, các pha hoạt ảnh, so phần kiếm bỏ nền và kiếm bị
+  cắt ở mép trên/che bởi tiêu đề. Cả hai cách đều cần vị trí ổn định qua hai ảnh.
+  Nếu cả hai cùng rõ nhưng chỉ hai nhân vật khác nhau thì chờ ảnh mới, không
+  chọn tùy ý. Không đọc các dấu hiệu trên nền bị làm tối sau bảng thông báo.
+  Cách chọn map trên danh sách chương giữ nguyên.
+- Kết quả dừng và thông báo popup được lưu ở `runtime/dungeon_last_result.json`;
+  nhật ký chiều kéo, dịch chuyển, hai mép, lượt quay lại và tên ảnh tương ứng ở
+  `runtime/dungeon_scan/latest.json`, phục vụ đối chiếu đúng lần chạy.
+
+**Khôi phục nhận diện kết hợp (25/10/2026):** áp dụng cho cả chọn ải mới và
+đánh lại sau thua. Kiểm thử bao gồm sao không đọc được nhưng kiếm còn rõ,
+kiếm bị cắt, kiếm phát sáng, hai nguồn chỉ vị trí khác nhau, nhận một ảnh lóe
+và đánh lại có giới hạn. Các cải tiến sao trên nền phức tạp và Chương kế trên
+nền sáng vẫn giữ nguyên.
+Toàn bộ **279 kiểm thử đạt**, gồm 97 cho vượt ải. Lượt thử GUI cố tình tắt
+nhận diện sao trong riêng bộ kiểm tra đã xác nhận chọn ải bằng dấu kiếm và
+bấm Chiến; sau đó game quay về thông báo trước đăng nhập nên chưa xác nhận
+kết quả trận và đã dừng lượt thử, không ghi nhận thắng. Ảnh tại
+`runtime/dungeon_combined_sword_fallback/live.png`.
+
+Các mục dưới đây là nhật ký các phiên bản trước, gồm giai đoạn chỉ dùng sao;
+quy tắc hiện tại là kết hợp sao tối và dấu kiếm như mô tả ở trên.
+
+**Chuyển sang chỉ dùng ba sao tối (25/10/2026):** bỏ toàn bộ nhánh so khớp dấu
+kiếm đầy đủ, có mặt nạ, bị cắt và đầu lưỡi kiếm khi chọn ải/chọn lại sau thua.
+Bổ sung mẫu sao trên nền xanh, đêm và cát; luôn xác nhận qua hai ảnh. Kiểm thử
+bao gồm kiếm vẫn rõ nhưng sao thiếu, đã có sao vàng hoặc nhiều hàng sao tối;
+những trường hợp này không được chọn chỉ nhờ dấu kiếm.
+Đã chạy qua GUI trên MuMu, thắng liên tiếp hai ải bằng nhận diện sao tối và
+dừng đúng giới hạn thử hai ải; Auto/Bỏ qua hoạt động ở cả hai trận. Báo cáo:
+`runtime/dungeon_stars_only/gui_result.json`. Toàn bộ **270 kiểm thử đạt**,
+gồm 88 trường hợp cho vượt ải.
+
+**Sửa bỏ sót sao trên nền khác (25/10/2026):** đã tái hiện popup tại Quân
+Hoàng Cái 3 của **Trí Toán Hoa Dung–Thượng** (8/30 sao), rồi kiểm tra cả Quân
+Hoàng Cái 4 trên nền nâu. Biên ảnh mẫu cũ bao gồm chi tiết nền nên loại nhầm
+hàng ba sao tối dù còn hiện rõ. Bổ sung mẫu hình học chỉ có đường viền ba sao,
+độc lập với nền; kiểm tra phần tô sao tối, đều màu để loại nét nhân vật có thể
+trùng hình. Giữ loại sao vàng, nhiều ứng viên và xác nhận hai ảnh; không thêm
+mẫu nền riêng cho từng ải, không dùng lại dấu kiếm. Cho phép một sao có nền
+chi tiết hiện xuyên qua (Quân Hoàng Cái 6 nằm trên tượng đá); cả ba vẫn phải
+thỏa điều kiện sao tối. Ba ảnh thực tế được giữ trong
+`tests/fixtures/dungeon/hoang_cai_*_stars.png`. Kiểm tra nền quanh sao thay vì
+chỉ hai góc trên; cách lấy vùng nền rộng hơn cần mức khớp hình chặt hơn để
+không nhận nhầm nét nhân vật. Có ảnh Chu Thái nằm trước hàng rào để hồi quy.
+Nút Chương kế được so phần chữ/viền, bỏ ảnh nền phía sau và kiểm tra độ sáng
+trên chính phần chữ để loại bảng thông báo làm tối map.
+
+Thử trực tiếp từ vị trí bị kẹt đã thắng **7 ải còn lại**, hoàn thành map ở
+**26/30 sao** và bấm Chương kế sang map mới, rồi chủ động dừng trước trận mới.
+Các lượt hiệu chỉnh được giữ riêng ở `runtime/dungeon_hoang_cai_fix*`;
+biên bản tổng `runtime/dungeon_hoang_cai_fix_verified.json` phân biệt các lần
+dừng trung gian với bước chuyển chương đã xác nhận. Bộ kiểm thử cuối có
+**277 trường hợp đạt**, trong đó 95 cho vượt ải.
+
+**Sửa popup dừng ở đầu map ngày 25/10/2026:** tái hiện tại **Xích Bích Chiến**,
+10/30 sao. Ảnh ở phía phải cho thấy Đào Vong Binh 4 còn ba sao tối, trong khi
+gần như toàn bộ dấu kiếm nằm ngoài mép trên. Popup "đã xác nhận quét tới cả hai
+mép nhưng chưa nhận được dấu Chiến" phản ánh lỗi nhận diện, không phải hoàn
+thành map. Chuyển hàng ba sao tối thành dấu hiệu chính; bổ sung so khớp biên sao
+và kiểm tra độ tối theo vùng nền để chịu hiệu ứng lửa, không dùng ngưỡng RGB tối
+cố định. Bộ quét có thêm lượt cuối quay về mép phải sau khi xác nhận hai mép.
+Đã kiểm tra thật lượt quét ba chặng trên map này: dịch chuyển khoảng +316.8 và
+-316.8 pixel tham chiếu, kết thúc bên phải sau 11 thao tác kéo. Ảnh và biên bản:
+`runtime/dungeon_coverage/coverage.json`; chuỗi thử GUI:
+`runtime/dungeon_popup_fix/`. Có ảnh hồi quy khi kiếm gần hết ra ngoài ảnh, hàng
+sao chịu lửa, nhiều hàng sao tối cùng hiện và một sao đã chuyển vàng.
+
+Lượt thử trực tiếp thắng tiếp 5 ải tới Trương Liêu, rồi phát hiện Tào Tháo có
+cả dấu kiếm và phần trên hàng sao nằm ngoài ảnh. Đã bổ sung so khớp phần sao
+còn nhìn thấy, chỉ cho phép tại sát mép trên; giữ kiểm tra cả ba sao tối và hai
+ảnh ổn định. Lượt thử tiếp theo nhận đúng Tào Tháo, thắng, bấm Chương kế và
+chuyển sang **Trí Toán Hoa Dung–Thượng**, rồi chủ động dừng trước khi đánh map
+mới. Báo cáo/ảnh: `runtime/dungeon_clipped_stars/gui_result.json` và `result.png`.
+Bộ kiểm thử sau thay đổi: **268 trường hợp đạt**, trong đó 86 cho vượt ải.
+
+**Sửa quét chưa hết map ngày 25/10/2026:** thay giới hạn 3/6 lần kéo của bản trước
+bằng `MapSweep`, đo dịch chuyển ngang bằng điểm đặc trưng ORB của cảnh map (loại
+vùng giao diện cố định). Dùng ba đường kéo khác nhau khi ảnh không đổi để tránh
+nhầm một lần kéo trúng nhân vật với việc đã tới mép. Bộ quét hỗ trợ cả nhánh
+thường và Spam. Chỉ nút **Chương kế** xác nhận đã hoàn thành map; tổng sao không
+phải số ải. Nếu đã xác nhận hai mép mà vẫn không đọc được dấu, báo lỗi nhận diện,
+giữ nguyên chương. Nếu ảnh không đủ bằng chứng và chạm ngưỡng bảo vệ 60 lần,
+báo `scan_unverified` (chưa xác nhận kéo hết), không báo map hoàn thành.
+Thêm so khớp có mặt nạ chỉ giữ hình kiếm, bỏ nền cảnh, để xử lý dấu cùng hình
+nhưng nằm trên nền khác mà không hạ ngưỡng chung. Đã xác nhận thật cả hai mép
+map hiện tại trong 8 thao tác kéo, với dịch chuyển đo được khoảng +436 và +414
+pixel tham chiếu khi quét ngược; báo cáo `runtime/dungeon_coverage/coverage.json`.
+Bộ kiểm thử **264 trường hợp** đạt, gồm map cần 11 lần kéo mới thấy ải, xác nhận
+hai mép qua ba đường kéo, không suy ra mép khi ảnh thiếu đặc trưng, đo dịch chuyển
+thật, nhận dấu kiếm trên nền khác, và các nhánh Spam/Chương kế đã có.
+Sau kiểm tra hai mép, chạy GUI từ đầu map **Đoạt Mồi Lửa-Thượng**: tự kéo hai lần,
+tìm Mạnh Hoạch, thắng rồi tự chọn **Chúc Dung (ải 10)**. Trận Chúc Dung thua nên
+lượt thử tắt Spam dừng đúng với `status=defeat`, `wins=1`, `battle_skips=2`;
+không còn dừng vì `no_frontier` ở lượt này. Báo cáo và ảnh của cả chuỗi:
+`runtime/dungeon_full_route/gui_result.json`, `revealed_selected.png`, `result.png`.
+
+**Bổ sung kéo làm lộ dấu Chiến ngày 25/10/2026:** ảnh thực tế tại **Đoạt Mồi
+Lửa-Thượng**, 13/30 sao, cho thấy dấu của **Sa Ma Kha** nằm ngoài cạnh phải.
+Kéo sang trái làm lộ dấu. Bổ sung mẫu dấu kiếm bắt chéo, tách hai lưỡi và phát
+sáng trên nền map sáng; không giảm ngưỡng nhận diện chung. Chuẩn hóa tâm dấu
+giữa các pha để chọn cùng nhân vật. Phần nhận diện tên map loại nền cảnh bên
+ngoài khung tên, tránh báo sai đổi map khi kéo. Cả vòng vượt ải và vòng Spam
+đều hỗ trợ kéo để tìm lại dấu, với giới hạn và xác nhận trên ảnh mới.
+Đã chạy worker GUI thật từ đúng màn hình bị khuất: tự kéo trái, xác nhận dấu,
+chọn Sa Ma Kha, xác nhận Auto, Bỏ qua và thắng. Lượt thử dừng theo giới hạn 1
+trận thắng (`status=limit`, `wins=1`, `battle_skips=1`). Báo cáo và ảnh:
+`runtime/dungeon_pan/gui_result.json`, `before_pan.png`, `revealed_selected.png`,
+`result.png`. Bộ kiểm thử **259 trường hợp** chạy thành công; có kiểm tra các
+pha hoạt ảnh, quét trái, dấu xuất hiện một ảnh đơn lẻ, nút Dừng trước kéo, vị trí
+đổi sau kéo trong cùng map và chặn đánh lại nếu tên map đổi.
 
 **Sửa bỏ sót ải 10 ngày 25/10/2026:** ảnh lỗi thực tế tại
 **Thất Tinh Đàn Phong-Trung**, boss **Tư Mã Ý**, cho thấy phần trên dấu kiếm nằm

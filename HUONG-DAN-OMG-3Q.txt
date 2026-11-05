@@ -28,6 +28,18 @@ NẾU GAME THAY ĐỔI HOẶC KẾT NỐI LỖI
 
 Phần Kịch bản nâng cao là công cụ bổ sung cho các tác vụ sẽ làm sau; không cần thiết lập kịch bản để đăng nhập.
 
+NHIỆM VỤ HẰNG NGÀY Ở SẢNH CHÍNH
+
+1. Vào sảnh chính của OMG 3Q, ở ngoài Cỗ Máy Thời Gian.
+2. Trong nhóm Sảnh chính · Nhiệm vụ hằng ngày, bấm Mở nhiệm vụ hằng ngày.
+3. Tool nhận diện icon cuộn giấy ở góc trên bên phải và mở bảng Nhiệm vụ.
+
+- Nếu đang ở tab Thành tựu, tool chuyển về tab Nhiệm vụ; đã mở đúng thì giữ nguyên.
+- Bước này chỉ mở bảng, chưa thực hiện nhiệm vụ hoặc bấm nhận thưởng.
+- Các bước thực hiện từng nhiệm vụ sẽ được bổ sung theo hướng dẫn sau.
+- Có thể dùng nút Dừng chung. Nếu không ở sảnh chính/bảng nhiệm vụ đã biết, tool dừng.
+- Ảnh và kết quả từng lượt nằm trong runtime/daily_tasks/.
+
 PHÓ BẢN CỖ MÁY THỜI GIAN
 
 1. Vào game bằng nhân vật muốn chạy phó bản.
