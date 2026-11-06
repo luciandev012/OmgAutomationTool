@@ -26,6 +26,12 @@ from treasure_skill import TreasureDetector, TreasureSkill, TeamTreasureSkill
 from evolution_skill import EvolutionDetector, EvolutionSkill, TeamEvolutionSkill, KINDS
 from chest_skill import ChestDetector, ChestSkill
 from daily_tasks_skill import DailyTasksSkill
+from trial_skill import TrialSkill
+from cross_server_skill import CrossServerSkill
+from beast_skill import BeastSkill
+from team_arena_skill import TeamArenaSkill
+from assistant_skill import AssistantSkill
+from fragment_skill import FragmentSweepSkill
 
 
 TITLE = "OMG 3Q · Công cụ thao tác MuMu"
@@ -236,10 +242,29 @@ class App:
 
         daily = ttk.LabelFrame(self.root, text="Sảnh chính · Nhiệm vụ hằng ngày", padding=8)
         daily.pack(fill="x", padx=10, pady=(8, 0))
-        self.daily_tasks_button = ttk.Button(daily, text="Mở nhiệm vụ hằng ngày", command=self.run_daily_tasks)
+        daily_navigation = ttk.Frame(daily)
+        daily_navigation.pack(fill="x")
+        self.daily_tasks_button = ttk.Button(daily_navigation, text="Mở nhiệm vụ hằng ngày", command=self.run_daily_tasks)
         self.daily_tasks_button.pack(side="left")
-        self.soul_hunt_button = ttk.Button(daily, text="Liệp Hồn 500 lần + Hồn Tướng", command=self.run_soul_hunt)
+        self.soul_hunt_button = ttk.Button(daily_navigation, text="Liệp Hồn 500 lần + Hồn Tướng", command=self.run_soul_hunt)
         self.soul_hunt_button.pack(side="left", padx=(8, 0))
+        self.assistant_button = ttk.Button(daily_navigation, text="Trợ thủ · 5 tab", command=self.run_assistant)
+        self.assistant_button.pack(side="left", padx=(8, 0))
+        self.fragment_button = ttk.Button(daily_navigation, text="Quét mảnh Điển Vi", command=self.run_fragment_sweep)
+        self.fragment_button.pack(side="left", padx=(8, 0))
+        daily_combat = ttk.Frame(daily)
+        daily_combat.pack(fill="x", pady=(6, 0))
+        self.trial_buttons = []
+        for kind, label in (("phi", "Thí Luyện Phi Thăng"), ("ma", "Thí Luyện Ma Động")):
+            button = ttk.Button(daily_combat, text=label, command=lambda kind=kind: self.run_trial(kind))
+            button.pack(side="left", padx=(8, 0))
+            self.trial_buttons.append(button)
+        self.cross_server_button = ttk.Button(daily_combat, text="Tỉ Võ Liên Server", command=self.run_cross_server)
+        self.cross_server_button.pack(side="left", padx=(8, 0))
+        self.beast_button = ttk.Button(daily_combat, text="Thần Thú Động", command=self.run_beast)
+        self.beast_button.pack(side="left", padx=(8, 0))
+        self.team_arena_button = ttk.Button(daily_combat, text="Quần Anh Tranh Bá", command=self.run_team_arena)
+        self.team_arena_button.pack(side="left", padx=(8, 0))
 
         dungeon = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Phó Bản · Sao tối + dấu kiếm", padding=8)
         dungeon.pack(fill="x", padx=10, pady=(8, 0))
@@ -509,6 +534,13 @@ class App:
     def _set_busy(self, value: bool, message: str | None = None) -> None:
         self.daily_tasks_button.configure(state="disabled" if value else "normal")
         self.soul_hunt_button.configure(state="disabled" if value else "normal")
+        self.cross_server_button.configure(state="disabled" if value else "normal")
+        self.beast_button.configure(state="disabled" if value else "normal")
+        self.team_arena_button.configure(state="disabled" if value else "normal")
+        self.assistant_button.configure(state="disabled" if value else "normal")
+        self.fragment_button.configure(state="disabled" if value else "normal")
+        for button in self.trial_buttons:
+            button.configure(state="disabled" if value else "normal")
         self.busy = value
         self.account_combo.configure(state="disabled" if value else "readonly")
         self.dungeon_button.configure(state="disabled" if value else "normal")
@@ -758,7 +790,25 @@ class App:
     def run_soul_hunt(self):
         self._run_daily_action(DailyTasksSkill.run_soul_hunt)
 
-    def _run_daily_action(self, action):
+    def run_trial(self, kind):
+        self._run_daily_action(lambda skill: skill.run_trial(kind=kind), TrialSkill)
+
+    def run_cross_server(self):
+        self._run_daily_action(CrossServerSkill.run_duels, CrossServerSkill)
+
+    def run_beast(self):
+        self._run_daily_action(BeastSkill.run_beast, BeastSkill)
+
+    def run_team_arena(self):
+        self._run_daily_action(TeamArenaSkill.run_arena, TeamArenaSkill)
+
+    def run_assistant(self):
+        self._run_daily_action(AssistantSkill.run_assistant, AssistantSkill)
+
+    def run_fragment_sweep(self):
+        self._run_daily_action(FragmentSweepSkill.run_sweep, FragmentSweepSkill)
+
+    def _run_daily_action(self, action, skill_type=DailyTasksSkill):
         if self.busy:
             self.status.set("Đang thực hiện một thao tác khác.")
             return
@@ -770,7 +820,7 @@ class App:
             if foreground_package(self.adb, serial) != package:
                 raise AdbError("Hãy mở OMG 3Q và vào sảnh chính trước.")
             device = AdbDevice(self.adb, serial, run_adb, input_text, package)
-            skill = DailyTasksSkill(device, stop=self.stop_event,
+            skill = skill_type(device, stop=self.stop_event,
                 progress=lambda text: self.events.put(("progress", text, None)),
                 preview=lambda png: self.events.put(("frame", png, None)))
             return action(skill)

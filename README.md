@@ -612,6 +612,89 @@ bổ sung mẫu phông số và loại bỏ tỷ lệ EXP bị OCR cắt dở tr
 Bộ kiểm thử hiện có **213 trường hợp**, gồm hết rương, tự nâng level trước khi mở,
 EXP dư, số mở thay đổi, thiếu điều kiện, dừng/hủy và không gửi lại lệnh chưa xác nhận.
 
+## Quần Anh Tranh Bá trong nhiệm vụ hằng ngày
+
+Từ sảnh chính, bấm **Quần Anh Tranh Bá** trong nhóm nhiệm vụ hằng ngày.
+Tool mở Khiêu Chiến, tìm thẻ Quần Anh Tranh Bá và mua phần còn lại trong
+giới hạn **4 lượt mua mỗi ngày**. Đã mua đủ thì dùng số lượt đang có;
+không mua lại khi chạy tiếp. Tổng giá đã xác nhận trong game là **800 NB**
+cho 4 lượt, cộng 3 lượt ban đầu thành 7. Nếu giá vượt 800 NB hoặc số lượt
+được phép mua vượt 4, tool dừng để kiểm tra.
+
+- Theo giờ Việt Nam, ưu tiên **Tự động ghép** từ 12:00 đến trước 14:00
+  và từ 18:00 đến trước 22:00. Ngoài giờ dùng **Tạo đội → Mời nhanh**.
+- Chờ đủ 4 đồng đội sẵn sàng, bấm Chiến rồi chờ ghép đối thủ và trận đấu
+  tự chạy. Giới hạn chờ đủ đội là 3 phút, ghép đối thủ và trận đấu là
+  5 phút mỗi bước; quá hạn thì báo lý do và lưu ảnh.
+- Đóng lần lượt bảng **Kết Thúc** và bảng thưởng bằng vùng trống phía dưới,
+  xác nhận số lượt giảm rồi mới bắt đầu trận tiếp theo. Hết lượt thì dừng.
+- Nút Dừng dùng chung. Nếu đang ghép đối thủ, tool thử hủy ghép; trận đã
+  bắt đầu vẫn do game tự xử lý. Ảnh và kết quả lưu trong `runtime/daily_tasks/`.
+
+**Thử trực tiếp ngày 05/11/2026:** mua 4 lượt với 800 NB, hoàn thành tổng
+7 trận trong khung giờ Tự động ghép và xác nhận còn 0 lượt. Nhánh Tạo đội
+→ Mời nhanh cũng đã mời đủ 4 đồng đội sẵn sàng, không đánh thêm khi hết lượt.
+
+## Trợ thủ trong nhiệm vụ hằng ngày
+
+Nút **Trợ thủ · 5 tab** chạy từ sảnh chính hoặc trang Trợ thủ đang mở,
+theo thứ tự sau:
+
+| Tab | Cấu hình trước khi Chấp hành hiện tại |
+| --- | --- |
+| Phó bản | Giữ cấu hình hiện có |
+| Đấu trường | Tổng 30 lượt khiêu chiến |
+| Tháp Ma Hồn | Tạo mới và càn quét 2; Luyện ngục 8; cuộn xuống đặt Tinh anh 6 |
+| Vượt ải trảm tướng | Thí luyện trảm tướng: càn quét 6 |
+| Thần binh | Thần binh chủng: khiêu chiến 6 |
+
+Tool đọc số đang hiển thị và chỉ cộng/trừ đến đúng mốc, không cộng thêm
+nếu đã đủ. Mục đang hiển thị 0 lượt được giữ nguyên; tab không còn mục
+cần chạy được bỏ qua. Vì vậy có thể chạy tiếp sau khi bị gián đoạn mà
+không tự mua lại các mục đã về 0. Việc tăng số lượt có thể tiêu NB khi
+bấm Chấp hành hiện tại, theo giá trong game.
+
+Mỗi tab chỉ gửi Chấp hành hiện tại một lần, chờ bảng Càn quét ổn định,
+chạm vùng trống phía dưới để đóng rồi xác nhận số lượt về 0. Không phụ
+thuộc dòng hướng dẫn chạm vùng trống vì dòng này có thể biến mất. Nếu
+chưa đọc rõ số, số chưa đổi sau cộng/trừ hoặc kết quả chưa xác nhận,
+tool dừng và lưu ảnh, không bấm lặp lại. Nút Dừng ngăn thao tác tiếp theo;
+lượt càn quét đã bắt đầu vẫn do game xử lý.
+
+Ảnh trước mỗi thao tác, ảnh sau từng tab và báo cáo được lưu ở
+`runtime/daily_tasks/<lượt chạy>/`.
+
+**Kiểm chứng ngày 05/11/2026:** Phó bản và Đấu trường 30 lượt đã chạy trong
+lượt khảo sát trước. Lượt rà soát sau chạy qua GUI hoàn tất Tháp Ma Hồn
+2 / 8 / 6, Trảm tướng 6 và Thần binh 6, đóng kết quả và xác nhận các lượt
+về 0. Chạy lại cả 5 tab khi đã hết lượt không gửi thêm lệnh cộng lượt hoặc
+Chấp hành. Đã sửa lỗi đọc số 6 trên ảnh thu nhỏ bằng cách ưu tiên đọc số từ
+ảnh gốc; kiểm thử ảnh ở 1920×1080, 1280×720 và 960×540.
+
+## Quét map mảnh Điển Vi trong nhiệm vụ hằng ngày
+
+Nút **Quét mảnh Điển Vi** đi theo luồng sảnh chính → Tướng / Túi tướng
+→ Mảnh Tướng → Nhận Nhiều. Tool mở một danh sách chọn mới, tìm đúng tên
+**Mảnh Điển Vi**, xác nhận chỉ một tướng được tích rồi bấm **C.Quét nhanh**.
+Nếu Điển Vi chưa hiện, tool cuộn tìm trong danh sách.
+
+Trước khi gửi OK, tool xác nhận đủ ba tùy chọn:
+
+- Tự dùng Thể Lực Đơn bổ sung thể lực.
+- Tự tiêu diệt kẻ địch mạnh bằng Chiến Lệnh.
+- Đồng thời càn quét Phó Bản Tinh Anh.
+
+Ô đã được tích sẵn được giữ nguyên. OK chỉ gửi một lần; sau đó chờ nút
+**Dừng quét** chuyển thành **Càn quét hoàn thành**, xác nhận kết quả, đóng
+danh sách chọn và dừng. Nút Dừng của tool cũng gửi Dừng quét nếu đã nhận
+diện đúng một lượt quét mảnh đang chạy. Khi chưa rõ màn hình hoặc chưa
+xác nhận được lựa chọn, tool lưu ảnh và dừng, không tự khởi động lượt mới.
+
+**Thử trực tiếp ngày 05/11/2026:** chọn riêng Điển Vi, bật đủ ba ô, game
+quét 50 lần; nhận 9 mảnh Điển Vi, số mảnh tăng 537 → 546. Đã xác nhận
+kết quả và trở lại Mảnh Tướng. Ảnh và báo cáo nằm trong
+`runtime/daily_tasks/<lượt chạy>/` như các chức năng nhiệm vụ ngày khác.
+
 ## Tệp riêng trên máy
 
 - `account.txt`: mỗi dòng một tên đăng nhập, UTF-8, hỗ trợ BOM.

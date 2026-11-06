@@ -18,6 +18,10 @@ from equipment_skill import EquipmentDetector
 from login_engine import SIZE, Match
 
 ROOT = Path(__file__).resolve().parent
+# The game accepts dismissal on the bottom hint strip, below "Tiếp 500 lần".
+# Taps in the middle of this particular reward overlay can be ignored.
+SOUL_REWARD_DISMISS_POINTS = ((.50, .974), (.38, .974), (.62, .974))
+SOUL_REWARD_DISMISS_DELAY = 1.5
 
 
 @dataclass(frozen=True)
@@ -221,9 +225,10 @@ class DailyTasksSkill:
         return None, None
 
     @staticmethod
-    def _empty_result_space(frame):
+    def _empty_result_space(frame, point=(.85, .37)):
         height, width = frame.shape[:2]
-        return Match("result_space", round(.85*width), round(.37*height), 1, 1, 1.)
+        x, y = point
+        return Match("result_space", round(x*width), round(y*height), 1, 1, 1.)
 
     def run_soul_hunt(self) -> DailyTasksResult:
         """Run one 500-draw batch, then spend the remaining Hồn Tướng challenges."""
@@ -246,6 +251,8 @@ class DailyTasksSkill:
         closed_battle_reward = False
         hunter_started = False
         fights = 0
+        reward_close_attempts = 0
+        reward_close_after = 0.
         waiting_for = "màn hình Liệp Hồn"
         try:
             self._check()
@@ -258,7 +265,13 @@ class DailyTasksSkill:
                 detector = self.detector
                 action, marker, count = None, None, None
                 if not hunter_started and detector.soul_reward_visible(frame):
-                    action, marker = "soul_close_reward", self._empty_result_space(frame)
+                    waiting_for = "bảng kết quả Liệp Hồn 500 lần đã đóng"
+                    if self.clock() >= reward_close_after:
+                        if reward_close_attempts < len(SOUL_REWARD_DISMISS_POINTS):
+                            point = SOUL_REWARD_DISMISS_POINTS[reward_close_attempts]
+                            action, marker = "soul_close_reward", self._empty_result_space(frame, point)
+                        else:
+                            action = "soul_reward_still_open"
                 elif (not closed_battle_reward and detector.find(frame, "hunter_dismiss_hint", .91)
                       and ((pending and pending[0] == "hunter_fight")
                            or detector.find(frame, "hunter_victory", .92))):
@@ -310,18 +323,23 @@ class DailyTasksSkill:
                     else:
                         action, marker = self._soul_next_action(frame)
 
-                terminal = action in {"hunter_done", "hunter_no_refresh"}
-                repeatable = action in {"hunter_fight", "hunter_refresh", "hunter_close_reward"}
+                terminal = action in {"hunter_done", "hunter_no_refresh", "soul_reward_still_open"}
+                repeatable = action in {"hunter_fight", "hunter_refresh", "hunter_close_reward", "soul_close_reward"}
                 current = (action, count) if terminal or (marker and (repeatable or action not in self.actions)) else None
                 if current and current == previous:
                     if action == "hunter_done":
                         return self._finish("completed", f"Hồn Tướng đã hết lượt khiêu chiến. Lượt dùng trong lần chạy này: {fights}.")
                     if action == "hunter_no_refresh":
                         return self._finish("blocked", "Hết lượt làm mới mà chưa gặp Triệu Vân hoặc Nam Hoa.")
+                    if action == "soul_reward_still_open":
+                        return self._finish("blocked", f"Bảng kết quả Liệp Hồn 500 lần vẫn mở sau {reward_close_attempts} lần chạm vùng trống.")
                     self.progress(messages[action])
                     self._tap(frame, marker, action)
                     deadline = self.clock()+self.timeout
-                    if action in {"hunter_fight", "hunter_refresh"}:
+                    if action == "soul_close_reward":
+                        reward_close_attempts += 1
+                        reward_close_after = self.clock()+SOUL_REWARD_DISMISS_DELAY
+                    elif action in {"hunter_fight", "hunter_refresh"}:
                         pending = action, count
                         closed_battle_reward = False
                     elif action == "hunter_close_reward":
