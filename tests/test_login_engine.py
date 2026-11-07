@@ -94,25 +94,30 @@ class LoginTests(unittest.TestCase):
         result, device = self.run_engine([1, 2, 2, 2, 2, 3, 4, 3, 5, 6, 7, 8, 8], accept_terms=True)
         self.assertEqual(result.status, "success")
         self.assertEqual([a[1] for a in device.actions if a[0] == "text"], ["test-user", "test-password"])
-        self.assertEqual(device.actions[0], ("launch", True))
+        self.assertEqual(device.actions[0], ("launch", False))
 
     def test_saved_session_cannot_be_reported_as_selected_account(self):
         result, device = self.run_engine([5] * 50, accept_terms=True)
         self.assertEqual(result.status, "unknown")
         self.assertFalse(any(a[0] == "text" for a in device.actions))
-        self.assertEqual(len([a for a in device.actions if a[0] == "tap"]), 2)
+        self.assertEqual(len([a for a in device.actions if a[0] == "tap"]), 1)
 
-    def test_start_button_authentication_reopens_title_before_choosing_server(self):
+    def test_switch_account_authenticates_without_restarting_game(self):
         states = [5] * 12 + [1, 2, 2, 2, 2] + [3] * 6 + [4, 5, 6, 7, 8, 8]
         result, device = self.run_engine(states, accept_terms=True)
         self.assertEqual(result.status, "success")
-        self.assertEqual(len([a for a in device.actions if a[0] == "launch"]), 2)
+        self.assertEqual([a for a in device.actions if a[0] == "launch"], [("launch", False)])
 
-    def test_consent_can_be_reapplied_after_game_restarts_and_changes_server(self):
+    def test_consent_is_checked_only_after_authentication_and_server_selection(self):
         states = [3] * 4 + [5, 1, 2, 2, 2, 2] + [3] * 4 + [4, 3, 5, 8, 8]
         result, device = self.run_engine(states, accept_terms=True)
         self.assertEqual(result.status, "success")
-        self.assertEqual(device.actions.count(("tap", 782, 355)), 2)
+        self.assertEqual(device.actions.count(("tap", 782, 355)), 1)
+        consent = device.actions.index(("tap", 782, 355))
+        password = device.actions.index(("text", "test-password"))
+        server = device.actions.index(("tap", 865, 226))
+        self.assertLess(password, server)
+        self.assertLess(server, consent)
 
     def test_failed_authentication_is_submitted_only_once(self):
         result, device = self.run_engine([2] * 50)

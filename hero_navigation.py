@@ -35,4 +35,3 @@ class HeroNavigationMixin:
                 if walker._same_view(old,self.roster.visible_heroes(frame)):
                     break
         raise ValueError("Không tìm lại được tướng đã chọn sau khi xác minh sự kiện; chưa nâng cấp.")
-

@@ -249,4 +249,3 @@ class TeamTreasureSkill(TeamAdvanceSkill):
             stop=self.stop,progress=lambda text:self.progress(f"Tướng {index}/6: {text}"),
             preview=self.preview,navigation_detector=self.navigation,clock=self.clock,
             sleeper=self.sleeper,timeout=self.timeout,evidence_root=self.folder/f"hero_{index:02d}")
-

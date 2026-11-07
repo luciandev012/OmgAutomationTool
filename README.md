@@ -1,18 +1,112 @@
 # OMG Automation Tool
 
-Ứng dụng Windows điều khiển OMG 3Q trên MuMu Player 12 qua ADB.
+Ứng dụng Windows điều khiển OMG 3Q trên MuMuPlayer / LDPlayer qua ADB.
 
 Mở `Mo-tool-OMG-3Q.cmd`; xem `HUONG-DAN-OMG-3Q.txt` để sử dụng.
 Trên máy mới, cài Python 3.11 rồi chạy `Cai-dat.cmd`.
 
-Sau khi tải mã từ Git, chép `account.example.txt` thành `account.txt` và điền tài khoản,
-mỗi dòng một tên. Chép `credentials.example.json` thành `credentials.local.json`
-rồi điền mật khẩu chung trên máy của bạn. Có thể chép `login_settings.example.json`
-thành `login_settings.json` để thiết lập các lựa chọn; mặc định chưa cho phép tích ô điều khoản.
+## Phiên bản giả lập và cấu hình test
+
+Thông tin kiểm tra trên máy phát triển ngày **21/10/2026**. Phiên bản ứng dụng
+giả lập được đọc từ bản cài trên Windows; MuMuPlayer 6.8.5.0 bên dưới đang dùng
+instance **Android 12** (số phiên bản ứng dụng và phiên bản Android là hai thông tin riêng).
+
+| Giả lập đang cài | Phiên bản | Link tải chính thức |
+| --- | --- | --- |
+| LDPlayer 9 | **9.5.41.0** | [Tải LDPlayer 9 cho Windows](https://res.ldrescdn.com/download/package/LDPlayer9.0.exe?n=LDPlayer9.0_ens_1001_ld.exe) · [Lịch sử phiên bản](https://www.ldplayer.net/other/version-history-and-release-notes.html) |
+| MuMuPlayer | **6.8.5.0** | [Tải MuMuPlayer cho Windows](https://www.mumuplayer.com/download/) |
+
+Các link trên là nguồn tải chính thức của hãng, có thể cung cấp bản mới hơn theo
+thời điểm tải. Chưa xác minh được link bộ cài cố định đúng build **9.5.41.0** và
+**6.8.5.0**; kiểm tra lại phiên bản sau khi cài nếu cần tái lập môi trường test.
+
+**Thiết lập instance hiện tại:** đọc từ cấu hình của instance 0 và 1 của mỗi loại;
+đây là giá trị cấu hình, chưa phải kết quả đo hiệu năng hay số máy chạy ổn định.
+
+| Thiết lập mỗi instance | MuMuPlayer (Android 12) | LDPlayer 9 |
+| --- | --- | --- |
+| CPU cấp cho giả lập | 2 vCPU | 4 vCPU |
+| RAM cấp cho giả lập | 4 GB | 4096 MB |
+| Độ phân giải | 1920 × 1080 (16:9) | 1920 × 1080 (16:9) |
+| DPI | 280 | 280 |
+| FPS trong cấu hình | `fps_limit=30`, `fps_limit_low=15`, `fps_limit_real=60` | 60 |
+
+Bộ ảnh nhận diện hiện được kiểm tra ở **1920 × 1080**. Cần kiểm thử lại khi đổi
+độ phân giải hoặc phiên bản giả lập.
+
+## Chọn và điều khiển instance MuMu / LDPlayer
+
+Tool tự phát hiện giả lập được cài đặt. Nếu có một loại, tool tự chọn loại đó;
+nếu có cả hai, chọn MuMu hoặc LDPlayer ở thanh trên rồi bấm Mở.
+Có thể đặt `OMG_MUMU_MANAGER` hoặc `OMG_LDMULTIPLAYER` nếu cài ở đường dẫn riêng.
+
+Hộp thoại hiển thị tên instance trong Multi, bao gồm máy đang tắt.
+Tích chọn số lượng tùy ý rồi bấm **Khởi động**: mỗi instance có luồng mở riêng,
+khởi động đồng thời, chờ Android và tự mở OMG 3Q. Không tự đăng nhập tài khoản.
+Mỗi dòng hiển thị tiến độ / lỗi riêng. Một máy lỗi không dừng các máy khác.
+
+**Dấu tích tự xóa ngay sau khi nhận mỗi lệnh**. Việc bỏ tích không hủy tác vụ đã gửi.
+Ví dụ: tích A+B → Khởi động; tích lại A → Tạm dừng, B vẫn chạy;
+tích lại A → Tiếp tục. Chọn tất cả / Bỏ chọn tất cả giúp chọn nhanh.
+Làm mới nạp lại danh sách và bỏ các dấu tích, không làm mất tác vụ đang chạy.
+
+- **Tạm dừng**: chặn các thao tác tiếp theo của tool trên các máy được tích,
+  kể cả tác vụ đăng nhập / phó bản / trang bị sau khi mở game.
+- **Tiếp tục**: cho các máy được tích tiếp tục tác vụ đang tạm dừng.
+- **Dừng tác vụ**: hủy tác vụ trên các máy được tích; không tắt game hay giả lập.
+  Muốn chạy lại cần chủ động gửi lệnh mới. Tiếp tục không khôi phục tác vụ đã hủy.
+- Lệnh ADB đã gửi có thể hoàn tất trước khi tạm dừng / dừng có hiệu lực.
+- **Đóng**: đóng hộp thoại; tác vụ và trạng thái điều khiển vẫn thuộc tool.
+  Mở lại hộp thoại để điều khiển tiếp. Thoát toàn bộ tool sẽ yêu cầu dừng mọi tác vụ.
+
+Ở cửa sổ chính, chọn **Thao tác trên** theo tên máy đã kết nối trước khi chạy
+đăng nhập, phó bản, trang bị. Có thể bắt đầu tác vụ trên A rồi chuyển
+sang B để chạy tác vụ khác. Mỗi máy chỉ nhận một tác vụ tại một thời điểm;
+đổi máy trên giao diện không đổi đích ADB của tác vụ đã chạy. Các thao tác chính
+áp dụng cho máy ở ô Thao tác trên; checkbox trong hộp thoại dùng để gửi lệnh điều khiển.
+
+IP/ID chỉ dùng nội bộ cho ADB. Các instance dùng cờ dừng,
+trạng thái tạm dừng, đồng hồ và thư mục ảnh chẩn đoán riêng.
+Không thay ADB của giả lập hoặc tắt tất cả instance khi dừng một tác vụ.
+
+## Tài khoản Excel và Script A / B / C
+
+Thông tin đăng nhập lấy hoàn toàn từ `account.xlsx`, không dùng danh sách TXT
+hay ô mật khẩu chung. Đóng Excel trước khi chạy để tool có thể lưu tệp.
+Cấu trúc: `STT | TK | MK | Status | 1 … 15 | Hoàn Thành`;
+dòng ngay dưới tài khoản cuối là `Tổng đã hoàn thành`.
+Tool đọc số lượng tài khoản theo danh sách hiện có, tự chuyển dòng tổng xuống cuối
+và cập nhật công thức khi thêm tài khoản; không cố định số hàng. Tài khoản và mật
+khẩu phải được lưu dưới dạng văn bản để giữ nguyên số 0 đầu và ký tự đặc biệt.
+
+Mở và kết nối các instance, chọn tệp rồi bấm một trong ba nút:
+
+- **Script A**: tài khoản chưa hoàn thành ngày 1; thành công ghi `1` ở ngày 1.
+- **Script B**: tổng Hoàn Thành từ 1 đến 14, các ngày đã xong liên tiếp;
+  thành công ghi `1` ở ngày tiếp theo. Mỗi tài khoản chỉ chạy một ngày trong một lượt.
+- **Script C**: tổng Hoàn Thành ít nhất 2; không thay đổi các cột ngày.
+
+Ba nút hiện dùng cùng chu trình thử, chưa triển khai nhiệm vụ riêng từng ngày:
+đăng nhập → vào sảnh Cỗ Máy Thời Gian → đóng/mở game → xác nhận thông báo.
+Chỉ sau khi thấy thông báo, tool mới lưu Status `V` và số `1` của A/B,
+trước khi đóng thông báo để đăng nhập tài khoản kế tiếp.
+Chu trình đóng/mở là dấu hiệu hoàn thành của bài thử, không phải xóa phiên ZingID;
+bước Đổi Tài Khoản ở lượt tiếp theo vẫn phải xác thực tài khoản Excel mới.
+
+Các instance lấy hàng từ trên xuống, bỏ qua Status không trống, lưu `X` trước
+khi đăng nhập. Một bộ ghi Excel chung giữ việc nhận hàng và lưu kết quả tuần tự.
+Hoàn Thành và dòng tổng được cập nhật cả công thức lẫn giá trị tính sẵn.
+Status chuyển `X` → `V` khi hoàn thành. `V` và `ERR` được giữ nguyên sau khi
+tắt instance hoặc kết thúc lượt; tool không tự xóa Status. Hàng lỗi/gián đoạn
+giữ `X` nếu chưa xác nhận hoàn thành. Chỉ các hàng có Status trống được nhận tiếp.
+Hết tài khoản thì tự tắt instance; tất cả tắt thành công sẽ báo `Đã xong`.
+Nếu gặp lỗi, giữ nguyên hàng chưa hoàn thành và báo lỗi, không ghi thành công giả.
 
 ## Luồng đăng nhập
 
-`omg3q_tool.py` cung cấp giao diện Tkinter, kết nối ADB và kịch bản nâng cao.
+`omg3q_tool.py` cung cấp giao diện Tkinter thu gọn và kết nối ADB nội bộ qua instance.
+Gói OMG 3Q được dùng cố định; không cần nhập địa chỉ ADB hoặc chọn gói game thủ công.
+Cửa sổ tool và hộp điều khiển instance đều có thể kéo thay đổi kích thước.
 `login_engine.py` nhận diện ảnh từ `assets/login/`, xử lý ZingID, đổi phiên đã lưu,
 chọn server có nhân vật và xác nhận màn hình chính qua hai lần quan sát liên tiếp.
 Các lần nhập đều xóa cả hai phía con trỏ vì Ctrl+A không hoạt động trong biểu mẫu game.
@@ -697,12 +791,11 @@ kết quả và trở lại Mảnh Tướng. Ảnh và báo cáo nằm trong
 
 ## Tệp riêng trên máy
 
-- `account.txt`: mỗi dòng một tên đăng nhập, UTF-8, hỗ trợ BOM.
-- `credentials.local.json`: thuộc tính `common_password` chứa mật khẩu chung.
-- `login_settings.json`: lựa chọn vào game, server đã chơi và quyền tích ô điều khoản.
-- `omg3q_steps.json`: kết nối và kịch bản nâng cao; không chứa mật khẩu.
+- `account.xlsx`: TK/MK, Status X/V/ERR, các ngày 1–15 và tổng Hoàn Thành.
+- `runtime/`: nhật ký test, bản Excel sao lưu và ảnh chẩn đoán.
+- `.venv/`: môi trường Python cục bộ.
 
-Tài khoản, mật khẩu, lựa chọn cá nhân, môi trường Python và tệp chạy thử được loại khỏi Git.
+Các tệp tài khoản, mật khẩu, môi trường và dữ liệu chạy thử được loại khỏi Git.
 Mật khẩu được chuyển tới ADB qua stdin, không xuất hiện trong tham số tiến trình Windows.
 
 ## Kiểm thử
@@ -716,6 +809,44 @@ Mật khẩu được chuyển tới ADB qua stdin, không xuất hiện trong t
 
 `work/` chứa công cụ phát triển và ảnh quan sát cục bộ, không phải thành phần chạy của tool.
 
+## Phiên test đăng nhập Excel trên hai MuMu
+
+Nút **Test Excel · 2 MuMu × 3 lượt** tự mở hai instance MuMu có sẵn.
+Instance tới màn hình đăng nhập trước sẽ nhận hàng phù hợp đầu tiên từ trên xuống.
+Mỗi instance chạy tối đa ba tài khoản: đóng thông báo, giữ chỗ `X`, đăng nhập,
+xác nhận vào sảnh, thoát game, ghi `V` và `1` ở ngày 1, rồi mở lại game để đổi tài khoản.
+Sau lượt cuối vẫn mở lại và đóng thông báo; giữ nguyên Status để đối chiếu Excel.
+
+Lần test bỏ timeout phải được chọn riêng bằng cờ `--test-no-timeout`; nút test
+thông thường vẫn dùng timeout mặc định. Cờ này chỉ có hiệu lực cho lượt chạy đó.
+Các chế độ chạy bình thường giữ timeout cũ. Lệnh ADB riêng lẻ vẫn có giới hạn để
+có thể kiểm tra lại khi kết nối bị kẹt. Tạm dừng/Dừng vẫn có hiệu lực theo instance.
+Lỗi thực sự không được ghi thành công: hàng đang làm giữ `X` để kiểm tra.
+
+Các lần ghi `X`, `V` và ngày 1 được ghi sau khi lưu Excel thành công vào
+`runtime/excel_login_test.jsonl`; nhật ký không chứa tên đăng nhập hoặc mật khẩu.
+Bản Excel trước mỗi phiên test được sao lưu trong `runtime/`.
+Có thể mở trực tiếp phiên test bằng `.venv\Scripts\pythonw.exe omg3q_tool.py --excel-login-test`.
+
+
+## Sai thông tin đăng nhập — lỗi 8011
+
+Sau khi gửi đăng nhập, tool chỉ xử lý khi ảnh `invalid_credentials_8011.png`
+và `ok_button.png` cùng khớp ngưỡng 0,99 trên một ảnh màn hình.
+Tool bấm OK, lưu ngay `ERR` ở Status của hàng đang giữ chỗ, xác nhận lại biểu mẫu,
+xóa hai ô TK/MK rồi lấy hàng phù hợp có Status trống gần nhất từ trên xuống.
+Các hàng X, V, ERR đều được bỏ qua; không ghi số 1 cho tài khoản sai.
+ERR vẫn được giữ khi tắt instance. Nếu lưu ERR thất bại hoặc không xác nhận lại
+được biểu mẫu thì chưa chuyển sang tài khoản khác.
+Lỗi 8011 không tính là một lượt test thành công và không dừng các instance khác.
+
+
+## Giao diện hiện tại
+
+Đã tích hợp giao diện thu gọn từ Auto-Clone: bỏ dòng nhập ADB/gói game,
+bỏ phần ảnh giả lập và kịch bản chạm thủ công cùng code liên quan.
+Giữ Script A/B/C, quản lý instance, phó bản, trang bị và chế độ test Excel.
+Cửa sổ chính tự vừa nội dung; hộp instance mặc định 640×300 và cả hai đều co giãn được.
 
 **Cập nhật nút 5 lần (21/10/2026):** đã thử qua GUI trên Gia Cát Lượng,
 56 → 61 bằng đúng một lượt `5 lần` (`batch_actions=1, single_actions=0`).
@@ -724,3 +855,13 @@ Tool nhận diện cấp 61, số sách giảm và dừng đúng mốc. Báo cá
 Đã sửa nhận diện số vàng 6 bị nhầm với 0 bằng mẫu đúng phông chữ của game.
 Bộ kiểm thử hiện có **117 trường hợp đạt**, gồm batch 5 cấp, chuyển sang từng
 lần gần mốc và batch dừng sớm do hết sách/giới hạn.
+
+
+## Hợp nhất quản lý nhiều instance và các skill hiện có
+
+Các nút nhiệm vụ hằng ngày, nâng tướng, mở rương và spam phó bản vẫn được giữ.
+Chúng chạy trên instance đang chọn, với ADB, cờ dừng và đồng hồ riêng đã chốt
+khi bắt đầu; đổi lựa chọn không đổi đích của tác vụ đang chạy. Script A/B/C
+vẫn chỉ có chu trình thử đã mô tả ở trên, chưa tự ghép các skill daily thành chuỗi.
+Các skill tự đọc và đóng bảng kết quả của mình; tự đóng popup chung của luồng
+Excel không can thiệp vào những bảng kết quả này.

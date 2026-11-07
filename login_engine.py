@@ -11,6 +11,7 @@ from typing import Callable
 
 import cv2
 import numpy as np
+from screen_observer import capture_screen
 
 ROOT = Path(__file__).resolve().parent
 ACCOUNT_FILE = ROOT / "account.txt"
@@ -125,19 +126,22 @@ class Detector:
         return cv2.resize(image, SIZE, interpolation=cv2.INTER_AREA)
 
     def find(self, frame: np.ndarray, name: str, threshold: float = .92) -> Match | None:
-        template = self.templates.get(name)
-        if template is None:
+        templates = [image for key, image in self.templates.items()
+                     if key == name or key.startswith(name + '__')]
+        if not templates:
             return None
         x1, y1, x2, y2 = self.REGIONS.get(name, (0, 0, *SIZE))
         roi = cv2.cvtColor(frame[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)
-        if roi.shape[0] < template.shape[0] or roi.shape[1] < template.shape[1]:
-            return None
-        scores = cv2.matchTemplate(roi, template, cv2.TM_CCOEFF_NORMED)
-        _, confidence, _, point = cv2.minMaxLoc(scores)
-        if confidence < threshold:
-            return None
-        return Match(name, point[0] + x1, point[1] + y1,
-                     template.shape[1], template.shape[0], confidence)
+        best = None
+        for template in templates:
+            if roi.shape[0] < template.shape[0] or roi.shape[1] < template.shape[1]:
+                continue
+            scores = cv2.matchTemplate(roi, template, cv2.TM_CCOEFF_NORMED)
+            _, confidence, _, point = cv2.minMaxLoc(scores)
+            if confidence >= threshold and (best is None or confidence > best.score):
+                best = Match(name, point[0] + x1, point[1] + y1,
+                             template.shape[1], template.shape[0], confidence)
+        return best
 
     def first_played_card(self, frame: np.ndarray) -> Match | None:
         template = self.templates.get("server_card")
@@ -179,9 +183,10 @@ class Detector:
 
 class AdbDevice:
     def __init__(self, adb: str, serial: str, runner: Callable, writer: Callable,
-                 package: str = PACKAGE):
+                 package: str = PACKAGE, *, capture_options=None):
         self.adb, self.serial = adb, serial
         self.runner, self.writer, self.package = runner, writer, package
+        self.capture_options = capture_options or {}
 
     def run(self, *args: str, **kwargs) -> bytes:
         return self.runner(self.adb, "-s", self.serial, *args, **kwargs)
@@ -196,7 +201,7 @@ class AdbDevice:
             raise ValueError("OMG 3Q chưa được cài trong thiết bị này.")
 
     def capture(self) -> bytes:
-        return self.run("exec-out", "screencap", "-p", timeout=20)
+        return capture_screen(self.adb, self.serial, self.runner, **self.capture_options)
 
     def tap(self, x: int, y: int, frame_size: tuple[int, int]) -> None:
         width, height = frame_size
@@ -210,47 +215,60 @@ class AdbDevice:
                  str(round(y1 * height / SIZE[1])), str(round(x2 * width / SIZE[0])),
                  str(round(y2 * height / SIZE[1])), str(duration))
 
+    def clear_text(self) -> None:
+        self.run("shell", "input", "keyevent", "123", *(["67"] * 128), *(["112"] * 128))
+
     def replace_text(self, value: str) -> None:
         if not value or len(value) > 128 or any(ord(c) < 32 or ord(c) > 126 for c in value) or "%s" in value:
             raise ValueError("Tài khoản/mật khẩu phải dài 1–128 ký tự ASCII, không chứa chuỗi '%s'.")
         # Cocos/ZingID ignores Ctrl+A. Delete both sides of the caret before typing.
-        self.run("shell", "input", "keyevent", "123", *(["67"] * 128), *(["112"] * 128))
+        self.clear_text()
         self.writer(self.adb, self.serial, value)
+
+
+class InvalidCredentialsError(ValueError):
+    """Confirmed 8011 dialog, dismissed and fields cleared for the next account."""
 
 
 class LoginEngine:
     def __init__(self, device: AdbDevice, *, stop: threading.Event | None = None,
                  progress: Callable[[str], None] | None = None,
                  preview: Callable[[bytes], None] | None = None,
-                 detector: Detector | None = None, timeout: float = 180,
+                 detector: Detector | None = None, timeout: float | None = 180,
                  clock: Callable = time.monotonic, sleeper: Callable | None = None,
-                 startup_delay: float = 6):
+                 startup_delay: float = 6, metrics=None, fixed_waits: bool = True):
         self.device = device
+        self.metrics = metrics or (lambda **data: None)
         self.stop = stop or threading.Event()
         self.progress = progress or (lambda message: None)
         self.preview = preview or (lambda png: None)
         self.detector = detector or Detector()
         self.timeout, self.clock = timeout, clock
-        self.startup_delay = startup_delay
+        self.fixed_waits = fixed_waits
+        self.startup_delay = startup_delay if fixed_waits else 0
         self.sleeper = sleeper or self.stop.wait
         self.frame_size = SIZE
         self.last_png = b""
 
     def _wait(self, seconds: float = .8) -> None:
-        self.sleeper(seconds)
+        self.sleeper(seconds if self.fixed_waits else 0)
         if self.stop.is_set():
             raise InterruptedError()
 
     def _observe(self) -> np.ndarray:
         if self.stop.is_set():
             raise InterruptedError()
+        measured_at = time.perf_counter()
         self.last_png = self.device.capture()
+        captured_at = time.perf_counter()
         raw = cv2.imdecode(np.frombuffer(self.last_png, np.uint8), cv2.IMREAD_COLOR)
         if raw is None:
             raise ValueError("Ảnh chụp không hợp lệ.")
         self.frame_size = raw.shape[1], raw.shape[0]
         frame = self.detector.decode(self.last_png)
         self.preview(self.last_png)
+        self.metrics(capture_seconds=round(captured_at-measured_at, 4),
+                     decode_seconds=round(time.perf_counter()-captured_at, 4))
         return frame
 
     def _tap(self, match: Match, dx: int = 0, dy: int = 0) -> None:
@@ -278,6 +296,31 @@ class LoginEngine:
         self.progress("Đang xác thực ZingID…")
         self._tap(submit)
 
+    def _clear_login_fields(self) -> None:
+        """Observe the login form again after OK; never clear a field behind a dialog."""
+        started = self.clock()
+        for offset in (82, 166):
+            while True:
+                frame = self._observe()
+                form = self._form(frame)
+                error = self.detector.find(frame, 'invalid_credentials_8011', .99)
+                if form is not None and error is None:
+                    break
+                if error is None:
+                    # Some SDK builds return to the title/provider picker after OK.
+                    provider = self.detector.find(frame, 'zingid', .95)
+                    switch = self.detector.find(frame, 'switch_account', .94)
+                    title = self.detector.find(frame, 'start_game', .94)
+                    if provider is not None:
+                        self._tap(provider)
+                    elif switch is not None and title is not None:
+                        self._tap(switch)
+                if self.timeout is not None and self.clock() - started >= self.timeout:
+                    raise ValueError('Chưa xác nhận lại được biểu mẫu sau lỗi 8011; chưa nhập tài khoản tiếp theo.')
+                self._wait()
+            self._tap(form, dy=offset)
+            self.device.clear_text()
+
     def _finish(self, status: str, message: str, save_image: bool = False) -> LoginResult:
         path = ""
         if save_image and self.last_png:
@@ -290,8 +333,9 @@ class LoginEngine:
                     x, y = form.center
                     frame[max(0, y + 30):min(SIZE[1], y + 220),
                           max(0, x - 300):min(SIZE[0], x + 300)] = (28, 28, 28)
-                folder = ROOT / "runtime"
-                folder.mkdir(exist_ok=True)
+                serial = str(getattr(self.device, "serial", "default"))
+                folder = ROOT / "runtime" / re.sub(r"[^\w.-]", "_", serial)
+                folder.mkdir(parents=True, exist_ok=True)
                 output = folder / "login_last_screen.png"
                 output.write_bytes(cv2.imencode(".png", frame)[1].tobytes())
                 path = str(output)
@@ -303,13 +347,12 @@ class LoginEngine:
 
     def run(self, username: str, password: str, *, accept_terms: bool = False,
             enter_game: bool = True, prefer_played_server: bool = True,
-            reset: bool = True) -> LoginResult:
+            reset: bool = False, launch_on_start: bool = True,
+            on_invalid_credentials=None) -> LoginResult:
         submitted = False
         submitted_at = 0.0
         switched = False
         switch_at = 0.0
-        auth_requested = False
-        post_auth_restart = False
         terms_tap_at = None
         server_chosen = not prefer_played_server
         empty_server_at = None
@@ -324,12 +367,36 @@ class LoginEngine:
                 raise ValueError("Chưa chọn tài khoản hoặc chưa có mật khẩu chung.")
             if len(username) > 128 or len(password) > 128:
                 raise ValueError("Tài khoản/mật khẩu vượt giới hạn 128 ký tự.")
-            self.progress("Đang mở OMG 3Q…")
-            if reset:
-                self.device.launch(reset=True)
-            while self.clock() - start < self.timeout:
-                frame = self._observe()
+            self.progress("Đang mở OMG 3Q…" if launch_on_start else "Kiểm tra màn hình đăng nhập…")
+            if launch_on_start:
+                self.device.launch(reset=reset)
+            while self.timeout is None or self.clock() - start < self.timeout:
+                try:
+                    frame = self._observe()
+                except InterruptedError:
+                    raise
+                except Exception:
+                    if self.timeout is not None:
+                        raise
+                    self.progress("Chưa lấy được ảnh; tiếp tục chờ trong phiên test…")
+                    self._wait(2)
+                    continue
                 find = lambda name, threshold=.92: self.detector.find(frame, name, threshold)
+                if submitted:
+                    invalid = find('invalid_credentials_8011', .99)
+                    if invalid:
+                        ok = find('ok_button', .99)
+                        if ok is None:
+                            # Both templates must match in this same observation.
+                            self._wait()
+                            continue
+                        self.progress('Thông tin đăng nhập không chính xác [8011]; đóng OK…')
+                        self._tap(ok)
+                        if on_invalid_credentials is not None:
+                            on_invalid_credentials()
+                        self.progress('Đã ghi nhận lỗi 8011; xóa hai ô đăng nhập…')
+                        self._clear_login_fields()
+                        return self._finish('invalid_credentials', 'Lỗi 8011: đã đóng OK và xóa tài khoản/mật khẩu.')
                 if entered_at is not None:
                     confirmation = find("announcement_confirm", .94)
                     if find("lobby_announcement", .94) and confirmation:
@@ -348,7 +415,7 @@ class LoginEngine:
                     self.progress("Đóng thông báo khởi động…")
                     self._tap(notice)
                     if not submitted:
-                        switched, auth_requested = False, False
+                        switched = False
                         terms_tap_at = None
                     self._wait()
                     continue
@@ -365,27 +432,10 @@ class LoginEngine:
                     if not submitted:
                         self._fill_and_submit(username, password)
                         submitted, submitted_at = True, self.clock()
-                    elif self.clock() - submitted_at > 15:
+                    elif self.timeout is not None and self.clock() - submitted_at > 15:
                         return self._finish("failed", "Game chưa xác thực được tài khoản. Kiểm tra thông báo trong giả lập.", True)
                     self._wait()
                     continue
-                # Opening ZingID with "Vào Game" can auto-enter the last selected
-                # server after authentication. Reopen the title once so server history
-                # belongs to the newly authenticated account before selecting a role.
-                if submitted and auth_requested and not post_auth_restart:
-                    authenticated_screen = (find("start_game", .94) or find("lobby_status")
-                                            or find("lobby_announcement") or find("promo_dismiss", .90))
-                    if authenticated_screen:
-                        if self.clock() - submitted_at < 2:
-                            self._wait()
-                            continue
-                        self.progress("Xác thực xong; mở lại màn hình chọn server của tài khoản…")
-                        self.device.launch(reset=True)
-                        post_auth_restart = True
-                        terms_tap_at = None
-                        ready_after = self.clock() + self.startup_delay
-                        self._wait(2)
-                        continue
                 if find("server_panel", .94):
                     if not submitted:
                         return self._finish("unknown", "Chưa xác thực tài khoản được chọn; đã dừng.", True)
@@ -402,7 +452,7 @@ class LoginEngine:
                         continue
                     if empty_server_at is None:
                         empty_server_at = self.clock()
-                    if self.clock() - empty_server_at > 5:
+                    if self.timeout is not None and self.clock() - empty_server_at > 5:
                         return self._finish("needs_character", "Tài khoản chưa có server đã chơi. Đã dừng trước bước tạo nhân vật.", True)
                     self._wait()
                     continue
@@ -417,24 +467,13 @@ class LoginEngine:
                             self.progress("Mở Đổi Tài Khoản để dùng tài khoản được chọn…")
                             self._tap(switch)
                             switched, switch_at = True, self.clock()
-                        elif self.clock() - switch_at > 18:
-                            return self._finish("unknown", "Không mở được biểu mẫu Đổi Tài Khoản.", True)
-                        elif not auth_requested and self.clock() - switch_at > 1:
-                            terms = find("terms_label", .90)
-                            if terms is None:
-                                return self._finish("unknown", "Không nhận diện được điều khoản trước bước mở ZingID.", True)
-                            if not self.detector.terms_checked(frame, terms):
-                                if not accept_terms:
-                                    return self._finish("needs_terms", "Cần cho phép tích ô điều khoản để mở biểu mẫu ZingID.")
-                                if terms_tap_at is None:
-                                    self._tap(terms, dx=-168)
-                                    terms_tap_at = self.clock()
-                                elif self.clock() - terms_tap_at > 3:
-                                    return self._finish("unknown", "Ô điều khoản chưa được bật; đã dừng để tránh bấm nhầm.", True)
-                            else:
-                                self.progress("Mở biểu mẫu xác thực tài khoản…")
-                                self._tap(start_button)
-                                auth_requested = True
+                        elif self.clock() - switch_at > (18 if self.fixed_waits else 0):
+                            if self.timeout is not None:
+                                return self._finish("unknown", "Không mở được biểu mẫu Đổi Tài Khoản.", True)
+                            # Retry only when the same title-screen controls are visible.
+                            self.progress("Vẫn ở chọn server; thử mở Đổi Tài Khoản lại…")
+                            self._tap(switch)
+                            switch_at = self.clock()
                         self._wait()
                         continue
                     if not enter_game:
@@ -456,8 +495,11 @@ class LoginEngine:
                             self.progress("Tích ô điều khoản theo quyền đã cho phép…")
                             self._tap(terms, dx=-168)
                             terms_tap_at = self.clock()
-                        elif self.clock() - terms_tap_at > 3:
-                            return self._finish("unknown", "Ô điều khoản chưa được bật; đã dừng để tránh bấm nhầm.", True)
+                        elif self.clock() - terms_tap_at > (3 if self.fixed_waits else 0):
+                            if self.timeout is not None:
+                                return self._finish("unknown", "Ô điều khoản chưa được bật; đã dừng để tránh bấm nhầm.", True)
+                            self._tap(terms, dx=-168)
+                            terms_tap_at = self.clock()
                         self._wait()
                         continue
                     if entered_at is None:
@@ -465,7 +507,11 @@ class LoginEngine:
                         self._tap(start_button)
                         entered_at = self.clock()
                     elif self.clock() - entered_at > 25:
-                        return self._finish("failed", "Game chưa vào được server đã chọn. Kiểm tra kết nối hoặc thông báo máy chủ.", True)
+                        if self.timeout is not None:
+                            return self._finish("failed", "Game chưa vào được server đã chọn. Kiểm tra kết nối hoặc thông báo máy chủ.", True)
+                        self.progress("Vẫn ở chọn server; thử Vào Game lại…")
+                        self._tap(start_button)
+                        entered_at = self.clock()
                     self._wait()
                     continue
                 if find("create_character", .94):
