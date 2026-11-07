@@ -32,7 +32,7 @@ class InvalidCredentialTests(unittest.TestCase):
     def engine(self, states, callback=None):
         device, clock = ErrorDevice(states), FakeClock()
         engine = LoginEngine(device, detector=ErrorDetector(), timeout=12,
-                             clock=clock.now, sleeper=clock.sleep)
+                             clock=clock.now, sleeper=clock.sleep, fixed_waits=True)
         result = engine.run('user', 'secret', on_invalid_credentials=(
             callback if callback else lambda: device.actions.append(('ERR',))))
         return result, device

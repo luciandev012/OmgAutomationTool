@@ -21,6 +21,7 @@ from equipment_skill import EquipmentDetector, TeamEquipmentSkill
 from emulator_instances import detect_emulators
 from instance_dialog import InstanceDialog
 from task_sessions import SessionRegistry, active_session, guard_command
+from scrollable_frame import ScrollableFrame
 from advance_skill import AdvanceDetector, AdvanceSkill, TeamAdvanceSkill
 from level_skill import LevelDetector, LevelSkill, TeamLevelSkill
 from treasure_skill import TreasureDetector, TreasureSkill, TeamTreasureSkill
@@ -207,8 +208,6 @@ class App:
     def __init__(self, root: tk.Tk):
         self.root = root
         root.title(TITLE)
-        root.geometry(f"1230x{max(700,min(980,root.winfo_screenheight()-100))}")
-        root.minsize(1020, 700)
         self.events: queue.Queue = queue.Queue()
         self.sessions = SessionRegistry()
         self.busy = False
@@ -246,14 +245,21 @@ class App:
         self._build()
         self._refresh_busy()
         root.update_idletasks()
-        root.minsize(820, root.winfo_reqheight())
-        root.geometry("")  # Fit the initial window to its contents.
+        available_width = max(1, root.winfo_screenwidth() - 80)
+        available_height = max(1, root.winfo_screenheight() - 100)
+        width = min(available_width, max(820, self.scroll_area.content.winfo_reqwidth() + 24))
+        height = min(available_height, self.scroll_area.content.winfo_reqheight() + 90)
+        root.minsize(min(700, available_width), min(420, available_height))
+        root.geometry(f"{width}x{height}")
         root.protocol("WM_DELETE_WINDOW", self._close)
         self.serial.trace_add("write", lambda *args: self._refresh_busy())
         root.after(100, self._drain_events)
 
     def _build(self) -> None:
-        top = ttk.Frame(self.root, padding=10)
+        self.scroll_area = ScrollableFrame(self.root)
+        self.scroll_area.pack(fill='both', expand=True)
+        body = self.scroll_area.content
+        top = ttk.Frame(body, padding=10)
         top.pack(fill="x")
         ttk.Label(top, text="Giả lập").grid(row=0, column=0, sticky="w")
         self.provider_combo = ttk.Combobox(top, textvariable=self.provider_name,
@@ -275,7 +281,7 @@ class App:
         self.target_combo.bind("<<ComboboxSelected>>", self._target_changed)
         ttk.Label(top, text="Mỗi instance có tác vụ và điều khiển dừng riêng", wraplength=280).grid(row=1, column=4, columnspan=3, sticky="w", pady=(8, 0))
 
-        excel = ttk.LabelFrame(self.root, text="Tài khoản Excel", padding=9)
+        excel = ttk.LabelFrame(body, text="Tài khoản Excel", padding=9)
         excel.pack(fill="x", padx=10)
         excel.columnconfigure(3, weight=1)
         ttk.Label(excel, text="Tệp Excel").grid(row=0, column=0, sticky="w")
@@ -291,7 +297,7 @@ class App:
         self.excel_test_button = ttk.Button(excel, text="Test Excel · 2 MuMu × 3 lượt", command=self.run_excel_login_test)
         self.excel_test_button.grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
         ttk.Label(excel, text="3 lượt/máy · Giữ X/V để kiểm tra").grid(row=3, column=3, columnspan=2, sticky="w", pady=(8, 0))
-        daily = ttk.LabelFrame(self.root, text="Sảnh chính · Nhiệm vụ hằng ngày", padding=8)
+        daily = ttk.LabelFrame(body, text="Sảnh chính · Nhiệm vụ hằng ngày", padding=8)
         daily.pack(fill="x", padx=10, pady=(8, 0))
         daily_navigation = ttk.Frame(daily)
         daily_navigation.pack(fill="x")
@@ -317,7 +323,7 @@ class App:
         self.team_arena_button = ttk.Button(daily_combat, text="Quần Anh Tranh Bá", command=self.run_team_arena)
         self.team_arena_button.pack(side="left", padx=(8, 0))
 
-        dungeon = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Phó Bản · Sao tối + dấu kiếm", padding=8)
+        dungeon = ttk.LabelFrame(body, text="Cỗ Máy Thời Gian · Phó Bản · Sao tối + dấu kiếm", padding=8)
         dungeon.pack(fill="x", padx=10, pady=(8, 0))
         dungeon_row = ttk.Frame(dungeon)
         dungeon_row.pack(fill="x")
@@ -336,13 +342,13 @@ class App:
         ttk.Label(dungeon, text="0 = không giới hạn ải thắng · Spam tính các trận đánh lại, đặt lại khi thắng · Hết lượt sẽ hỏi chạy lượt mới").pack(anchor="w", pady=(4, 0))
         self._dungeon_controls()
 
-        equipment = ttk.Frame(self.root, padding=(10, 8, 10, 0))
+        equipment = ttk.Frame(body, padding=(10, 8, 10, 0))
         equipment.pack(fill="x")
         self.equipment_button = ttk.Button(equipment, text="Trang bị + Cường hóa toàn đội", command=self.run_equipment)
         self.equipment_button.pack(side="left")
         ttk.Label(equipment, text="Cỗ Máy Thời Gian · Tối đa 6 tướng · Lưu kết quả từng tướng").pack(side="left", padx=12)
 
-        advance = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Tiến cấp tướng", padding=8)
+        advance = ttk.LabelFrame(body, text="Cỗ Máy Thời Gian · Tiến cấp tướng", padding=8)
         advance.pack(fill="x", padx=10, pady=(8, 0))
         self.advance_button = ttk.Button(advance, text="Tiến cấp tướng", command=self.run_advance)
         self.advance_button.pack(side="left")
@@ -358,7 +364,7 @@ class App:
         self.advance_target_entry.pack(side="left")
         self._advance_controls()
 
-        level = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Tăng cấp tướng", padding=8)
+        level = ttk.LabelFrame(body, text="Cỗ Máy Thời Gian · Tăng cấp tướng", padding=8)
         level.pack(fill="x", padx=10, pady=(8, 0))
         self.level_button = ttk.Button(level, text="Tăng cấp tướng", command=self.run_level)
         self.level_button.pack(side="left")
@@ -374,7 +380,7 @@ class App:
         self.level_target_entry.pack(side="left")
         self._level_controls()
 
-        treasure = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Cường hóa bảo vật", padding=8)
+        treasure = ttk.LabelFrame(body, text="Cỗ Máy Thời Gian · Cường hóa bảo vật", padding=8)
         treasure.pack(fill="x", padx=10, pady=(8, 0))
         self.treasure_button = ttk.Button(treasure, text="Cường hóa bảo vật", command=self.run_treasure)
         self.treasure_button.pack(side="left")
@@ -390,7 +396,7 @@ class App:
         self.treasure_target_entry.pack(side="left")
         self._treasure_controls()
 
-        evolution = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Đột Phá / Giác Tỉnh", padding=8)
+        evolution = ttk.LabelFrame(body, text="Cỗ Máy Thời Gian · Đột Phá / Giác Tỉnh", padding=8)
         evolution.pack(fill="x", padx=10, pady=(8, 0))
         self.evolution_widgets = {}
         for kind, label in KINDS.items():
@@ -418,7 +424,7 @@ class App:
             self.evolution_widgets[kind] = (button,scope,mode,inputs)
         self._evolution_controls()
 
-        chest = ttk.LabelFrame(self.root, text="Cỗ Máy Thời Gian · Rương", padding=8)
+        chest = ttk.LabelFrame(body, text="Cỗ Máy Thời Gian · Rương", padding=8)
         chest.pack(fill="x", padx=10, pady=(8, 0))
         self.chest_button = ttk.Button(chest, text="Mở hết 4 loại rương", command=self.run_chest)
         self.chest_button.pack(side="left")
@@ -428,6 +434,7 @@ class App:
         foot.pack(fill="x")
         ttk.Button(foot, text="Dừng sau bước hiện tại", command=self.stop_current).pack(side="left", padx=8)
         ttk.Label(foot, textvariable=self.status, wraplength=540).pack(side="left", padx=12)
+        self.scroll_area.enable_mousewheel()
 
     def _close(self) -> None:
         self.sessions.stop_all()
@@ -450,7 +457,7 @@ class App:
             return
         try:
             from excel_login_test import ExcelLoginTest
-            test = ExcelLoginTest(self.sessions, provider, self.excel_path.get().strip(),
+            test = ExcelLoginTest(self.sessions, provider, Path(__file__).with_name('test_script.xlsx'),
                 run_adb, input_text, launch_game,
                 lambda session, text: self.events.put(('device_progress', (session, text), None)),
                 wait_forever=getattr(self, '_test_wait_forever', False),

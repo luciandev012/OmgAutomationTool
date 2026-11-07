@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
 
+from runtime_policy import no_step_delay
 import cv2
 import numpy as np
 
@@ -156,7 +157,7 @@ class DailyTasksSkill:
         self.progress = progress or (lambda message: None)
         self.preview = preview or (lambda png: None)
         self.clock = clock
-        self.sleeper = sleeper or self.stop.wait
+        self.sleeper = sleeper or no_step_delay
         self.timeout = timeout
         self.evidence_root = evidence_root or ROOT/"runtime/daily_tasks"
         self.last_png = b""

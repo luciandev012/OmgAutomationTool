@@ -17,7 +17,7 @@ class ExcelLoginTestTests(unittest.TestCase):
         clock = FakeClock()
         device = FakeDevice([5] * 40 + [1, 2, 2, 2, 2, 3, 4, 5, 8, 8])
         engine = LoginEngine(device, detector=FakeDetector(), timeout=None,
-                             clock=clock.now, sleeper=clock.sleep, startup_delay=0)
+                             clock=clock.now, sleeper=clock.sleep, startup_delay=0, fixed_waits=True)
         result = engine.run('user', 'pass', accept_terms=True)
         self.assertEqual(result.status, 'success')
         self.assertGreater(clock.time, 25)
@@ -31,7 +31,7 @@ class ExcelLoginTestTests(unittest.TestCase):
             if clock.time > 40:
                 stop.set()
         engine = LoginEngine(FakeDevice([0] * 100), detector=FakeDetector(), timeout=None,
-                             stop=stop, clock=clock.now, sleeper=wait)
+                             stop=stop, clock=clock.now, sleeper=wait, fixed_waits=True)
         self.assertEqual(engine.run('user', 'pass').status, 'cancelled')
 
     def test_uppercase_reservation_and_completion_use_existing_workbook_logic(self):
@@ -83,7 +83,7 @@ class ExcelLoginTestTests(unittest.TestCase):
         result=open_instance(provider,Instance('0','A',True),'com.gs2.omg',runner,Mock(),LaunchControl(),Mock(),timeout=None)
         self.assertEqual(result,('adb','emulator-5554'))
 
-    def test_no_fixed_waits_does_not_sleep_but_default_is_unchanged(self):
+    def test_no_fixed_waits_is_now_the_default(self):
         clock = FakeClock()
         engine = LoginEngine(FakeDevice([]), detector=FakeDetector(), fixed_waits=False,
                              clock=clock.now, sleeper=clock.sleep)
@@ -92,7 +92,8 @@ class ExcelLoginTestTests(unittest.TestCase):
         normal = LoginEngine(FakeDevice([]), detector=FakeDetector(),
                              clock=clock.now, sleeper=clock.sleep)
         normal._wait(1.1)
-        self.assertEqual(clock.time, 1.1)
+        self.assertEqual(clock.time, 0)
+        self.assertFalse(normal.fixed_waits)
 
     def test_target_stt_does_not_take_other_blank_rows(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -110,7 +111,7 @@ class ExcelLoginTestTests(unittest.TestCase):
         clock = FakeClock()
         device = FakeDevice([1, 2, 2, 2, 2, 3, 4, 5, 8, 8])
         engine = LoginEngine(device, detector=FakeDetector(), timeout=35,
-                             clock=clock.now, sleeper=clock.sleep)
+                             clock=clock.now, sleeper=clock.sleep, fixed_waits=True)
         result = engine.run('user', 'pass', accept_terms=True, launch_on_start=False)
         self.assertEqual(result.status, 'success')
         self.assertFalse(any(action[0] == 'launch' for action in device.actions))

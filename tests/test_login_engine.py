@@ -84,7 +84,7 @@ class LoginTests(unittest.TestCase):
     def run_engine(self, states, **options):
         clock, device = FakeClock(), FakeDevice(states)
         engine = login.LoginEngine(device, detector=FakeDetector(), timeout=35,
-                                   clock=clock.now, sleeper=clock.sleep, startup_delay=0)
+                                   clock=clock.now, sleeper=clock.sleep, startup_delay=0, fixed_waits=True)
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             with patch.object(login, "ROOT", Path(directory)):
                 result = engine.run("test-user", "test-password", **options)

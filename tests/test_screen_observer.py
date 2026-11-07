@@ -24,7 +24,7 @@ class ScreenObserverTests(unittest.TestCase):
         result = capture_screen('adb', 'device-A', runner, sleeper=lambda _: None)
         self.assertEqual(result, clear)
         taps = [c.args for c in runner.call_args_list if 'tap' in c.args]
-        self.assertEqual(taps, [('adb', '-s', 'device-A', 'shell', 'input', 'tap', '960', '540')] * 2)
+        self.assertEqual(taps, [('adb', '-s', 'device-A', 'shell', 'input', 'tap', '960', '1052')] * 2)
 
     def test_unknown_screen_is_returned_without_tapping(self):
         clear = frame()

@@ -101,7 +101,6 @@ class Emulator:
             while time.monotonic() < deadline:
                 if ready():
                     return
-                time.sleep(.5)
             raise EmulatorError('MuMu chính chưa tạo được kết nối điều khiển (RPC). '
                 'Lệnh mở MuMu đã gửi nhưng ứng dụng chưa sẵn sàng hoặc đã thoát. '
                 'Hãy mở MuMu chính từ Windows và kiểm tra nhật ký khởi động.')
@@ -165,13 +164,9 @@ class LaunchControl:
         return time.monotonic() - self.pause_seconds
 
     def sleep(self, seconds):
-        deadline = self.clock() + max(0, seconds)
-        while True:
-            self.checkpoint()
-            remaining = deadline - self.clock()
-            if remaining <= 0:
-                return
-            self.cancelled.wait(min(.1, remaining))
+        # Legacy callback name, now deliberately delay-free for all GUI skills.
+        # Pause/cancel still blocks or interrupts in checkpoint(), as intended.
+        self.checkpoint()
 
 
 def open_instance(provider, instance, package, run_adb, launch_game, control, progress, timeout=180, on_device=None):
@@ -209,12 +204,28 @@ def open_instance(provider, instance, package, run_adb, launch_game, control, pr
                         lines = focus.decode("utf-8", "replace").splitlines()
                         if any(package + "/" in line and ("ResumedActivity" in line or "topResumedActivity" in line) for line in lines):
                             return adb, serial
-                        control.cancelled.wait(1)
+                        control.checkpoint()
                     raise EmulatorError("Đã gửi lệnh mở game nhưng chưa xác nhận OMG 3Q ở phía trước.")
         except LaunchCancelled:
             raise
         except Exception as exc:
             last_error = str(exc)
-        control.cancelled.wait(2)
+        control.checkpoint()
     raise EmulatorError(f"Hết thời gian chờ {instance.name}. {last_error}")
+
+
+def restart_instance(provider, instance, package, runner, launcher, control, progress, on_device):
+    """Restart exactly one stalled VM; never reset the shared ADB server."""
+    control.checkpoint()
+    provider.shutdown(instance.index)
+    deadline = control.clock() + 60
+    while True:
+        control.checkpoint()
+        current = next((i for i in provider.instances() if i.index == instance.index), None)
+        if current is not None and not current.running:
+            break
+        if control.clock() >= deadline:
+            raise TimeoutError('Chưa xác nhận instance đã tắt; không mở trùng.')
+    return open_instance(provider, Instance(instance.index, instance.name, False), package,
+                         runner, launcher, control, progress, timeout=180, on_device=on_device)
 

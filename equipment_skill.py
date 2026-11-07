@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
+from runtime_policy import no_step_delay
 import cv2
 import numpy as np
 
@@ -239,7 +240,7 @@ class EquipmentSkill:
         self.preview = preview or (lambda png: None)
         self.detector = detector or EquipmentDetector()
         self.navigation = navigation_detector or DungeonDetector()
-        self.clock, self.sleeper = clock, sleeper or self.stop.wait
+        self.clock, self.sleeper = clock, sleeper or no_step_delay
         self.timeout = timeout
         self.evidence_root = evidence_root or ROOT / "runtime/equipment"
         self.folder = self.evidence_root / uuid.uuid4().hex

@@ -23,6 +23,7 @@ class ToolTests(unittest.TestCase):
         app._scan_catalog=Mock()
         app.run_excel_script=Mock()
         with ExitStack() as stack:
+            stack.enter_context(patch.object(tool,'ScrollableFrame'))
             buttons=stack.enter_context(patch.object(tool.ttk,'Button'))
             for name in ('Frame','Label','Combobox','Entry','LabelFrame','Spinbox','Checkbutton'):
                 stack.enter_context(patch.object(tool.ttk,name))

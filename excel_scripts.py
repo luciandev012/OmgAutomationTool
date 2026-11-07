@@ -8,24 +8,50 @@ import numpy as np
 from login_engine import AdbDevice, Detector, LoginEngine, InvalidCredentialsError
 from dungeon_engine import DungeonDetector
 from task_sessions import active_session
+from screen_watchdog import ScreenWatchdog, ScreenStalledError
+from emulator_instances import restart_instance
 
 
 class ExcelCycle:
     def __init__(self, session, runner, writer, package, progress):
         self.session, self.control = session, session.control
+        self.watchdog = ScreenWatchdog(clock=self.control.clock)
         # A/B/C share this device throughout login, event entry and restart.
         # Every observation closes the blank-area hint before processing a step.
         self.device = AdbDevice(*session.connection, runner, writer, package,
             capture_options={'checkpoint': self.control.checkpoint,
-                             'sleeper': self.control.sleep, 'progress': progress})
+                             'watchdog': self.watchdog, 'progress': progress})
         self.progress = progress
         self.on_invalid_credentials = None
         self._start_from_current = False
 
     def run(self, account):
+        while True:
+            try:
+                return self._run(account)
+            except ScreenStalledError:
+                self.progress('Màn hình đứng 120 giây; khởi động lại riêng instance này…')
+                session = self.session
+                if self.validate_reservation(account) is None:
+                    raise InvalidCredentialsError('Tài khoản đã được ghi ERR; chuyển hàng tiếp theo.')
+                if getattr(session, 'provider', None) is None:
+                    raise ValueError('Chưa có định danh instance để khởi động lại an toàn.')
+                provider = session.provider
+                instance = next(i for i in provider.instances() if i.index == session.instance_index)
+                def launch(adb, serial, package):
+                    AdbDevice(adb, serial, self.device.runner, self.device.writer, package).launch()
+                def bind(adb, serial):
+                    session.connection = (adb, serial)
+                    self.device.adb, self.device.serial = adb, serial
+                restart_instance(provider, instance, self.device.package, self.device.runner,
+                                 launch, self.control, self.progress, bind)
+                self.watchdog.reset()
+                self._start_from_current = True
+
+    def _run(self, account):
         result = LoginEngine(self.device, stop=self.control.cancelled,
             clock=self.control.clock, sleeper=self.control.sleep, progress=self.progress,
-            timeout=240).run(account.username, account.password, reset=False,
+            timeout=None).run(account.username, account.password, reset=False,
                 accept_terms=True, enter_game=True, prefer_played_server=True,
                 launch_on_start=not self._start_from_current,
                 on_invalid_credentials=lambda: self.on_invalid_credentials(account) if self.on_invalid_credentials else None)
@@ -110,9 +136,11 @@ class ScriptBatch:
             with active_session(session):
                 cycle = self.cycle_factory(session)
                 cycle.on_invalid_credentials = lambda account: self.workbook.mark_error(account, session)
+                cycle.validate_reservation = lambda account: self.workbook.validate_reservation(account, session)
                 while not self.abort.is_set():
                     session.control.checkpoint()
                     account = self.workbook.claim(self.script, session)
+                    session.current_account = account
                     if account is None:
                         break
                     secret = account.password
@@ -124,9 +152,11 @@ class ScriptBatch:
                         self.workbook.mark_error(account, session)
                         self.audit('invalid_credentials', session, account.row)
                         self.progress(session, f'Dòng {account.row}: ERR (8011); lấy tài khoản trống tiếp theo.')
+                        session.current_account = None
                         continue
                     session.control.checkpoint()
                     self.workbook.complete(account, session)
+                    session.current_account = None
                     count += 1
                     self.audit('completed', session, account.row)
                     self.progress(session, f'Dòng {account.row} đã hoàn thành · Status V')

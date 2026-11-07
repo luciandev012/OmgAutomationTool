@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 account.txt
 account.xlsx
+test_script.xlsx
 .account-*.xlsx
 credentials.local.json
 login_settings.json

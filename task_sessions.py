@@ -16,6 +16,7 @@ class InstanceSession:
         self.name = name
         self.control = LaunchControl()
         self.connection = None
+        self.current_account = None
         self.active = False
         self.status = 'Sẵn sàng'
         self.lock = threading.Lock()

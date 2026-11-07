@@ -70,3 +70,22 @@ CẬP NHẬT 30/10/2026 — Automation_Daily
 - Bỏ timeout/nghỉ cố định chỉ khi chọn rõ cho phiên test; mặc định thường giữ nguyên.
 - Đã test thật STT 7 thành công (V/ngày 1=1), STT 8 sai đăng nhập (ERR/ngày 1 trống).
 - Script A/B/C vẫn là chu trình thử, chưa có nhiệm vụ thật riêng cho từng ngày.
+
+CẬP NHẬT 07/11/2026 — quy ước runtime mới, thay thế ghi chú delay cũ
+- Bài test đăng nhập 2 MuMu có tên test_multithreads.py, mặc định 5 lượt thành công/máy.
+- Bỏ thời gian nghỉ cố định giữa các bước chạy thật; xem AGENTS.md và runtime_policy.py.
+- Không đồng nhất timeout lệnh ADB với delay. Pause/Stop vẫn phải có hiệu lực.
+- Watchdog riêng cho test và Excel A/B/C: ảnh đứng/không đọc được 120 giây thì
+  chỉ tắt/mở instance đang treo và xác thực lại hàng X đang sở hữu.
+- X là giữ chỗ, không chứng minh đã đăng nhập; giữ V/ERR và toàn bộ kết quả ngày.
+- Popup nhấp vùng trống: chạm dải dưới, lấy ảnh mới, xác nhận đóng; không giới hạn 5 lần nhanh.
+- Khi báo Excel phải kèm cả Status và ngày 1–15. Không ghi TK/MK vào log.
+- Người sau phải đọc AGENTS.md trước khi sửa, không thêm delay trở lại.
+
+CẬP NHẬT 07/11/2026 — tách Excel test và tự reset đầu lượt
+- Tạo test_script.xlsx từ đúng STT 1–10 của account.xlsx, giữ TK/MK và cấu trúc nguồn.
+- test_multithreads.py và nút test đăng nhập GUI dùng test_script.xlsx; A/B/C giữ file chính.
+- Đầu mỗi lượt test_multithreads: sao lưu, xóa X/V/ERR và ngày 1–15 trong file test,
+  cập nhật tổng rồi mới khởi động worker. Không reset lại khi VM được watchdog phục hồi.
+- Chặn reset filename khác test_script.xlsx và danh sách khác đúng 10 STT 1–10.
+- File test chứa TK/MK nên được loại khỏi Git. --dry-run không reset, không mở game.

@@ -259,6 +259,46 @@ class AccountWorkbook:
             self._totals()
             self._save()
 
+    def validate_reservation(self, account, owner):
+        """Resume this worker's exact X row; never infer login success from X."""
+        with self.lock:
+            self._read()
+            if self.owners.get(account.row) is not owner:
+                raise ValueError('Hàng không còn thuộc instance đang khôi phục.')
+            if (self._value(f'B{account.row}') != account.username or
+                    self._value(f'C{account.row}') != account.password):
+                raise ValueError('Thông tin hàng Excel đã thay đổi; dừng khôi phục.')
+            status = self._value(f'D{account.row}').strip().upper()
+            if status in {'ERR', 'V'}:
+                return None
+            if status != 'X':
+                raise ValueError('Status không còn là X; dừng khôi phục.')
+            return account
+
+    def reset_test_progress(self):
+        """Clear only the dedicated ten-account test workbook, never production."""
+        with self.lock:
+            if self.path.resolve().name.casefold() != 'test_script.xlsx':
+                raise ValueError('Chỉ được reset test_script.xlsx; không xóa file tài khoản thật.')
+            self._read()
+            stts = [self._value(f'A{r}').strip() for r in self.rows]
+            if len(stts) != 10 or set(stts) != {str(i) for i in range(1, 11)}:
+                raise ValueError('File test phải có đúng 10 tài khoản STT 1–10.')
+            statuses = days = 0
+            for row in self.rows:
+                if self._value(f'D{row}').strip().upper() in {'X', 'V', 'ERR'}:
+                    self._set(f'D{row}', '')
+                    statuses += 1
+                for index in range(15):
+                    address = f'{chr(69 + index)}{row}'
+                    days += bool(self._value(address))
+                    self._set(address, '')
+            self.seen.clear()
+            self.owners.clear()
+            self._totals()
+            self._save()
+            return {'statuses_cleared': statuses, 'day_cells_cleared': days}
+
     def mark_error(self, account, owner):
         """Persist confirmed invalid credentials without changing any day result."""
         with self.lock:

@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from runtime_policy import no_step_delay
 import cv2
 import numpy as np
 
@@ -478,7 +479,7 @@ class DungeonEngine:
         self.progress = progress or (lambda message: None)
         self.preview = preview or (lambda png: None)
         self.detector = detector or DungeonDetector()
-        self.clock, self.sleeper = clock, sleeper or self.stop.wait
+        self.clock, self.sleeper = clock, sleeper or no_step_delay
         self.navigation_timeout, self.battle_timeout = navigation_timeout, battle_timeout
         self.auto_timeout = auto_timeout
         self.last_png = b""

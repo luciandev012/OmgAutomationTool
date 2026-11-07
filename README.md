@@ -846,7 +846,10 @@ Lỗi 8011 không tính là một lượt test thành công và không dừng c�
 Đã tích hợp giao diện thu gọn từ Auto-Clone: bỏ dòng nhập ADB/gói game,
 bỏ phần ảnh giả lập và kịch bản chạm thủ công cùng code liên quan.
 Giữ Script A/B/C, quản lý instance, phó bản, trang bị và chế độ test Excel.
-Cửa sổ chính tự vừa nội dung; hộp instance mặc định 640×300 và cả hai đều co giãn được.
+Cửa sổ chính giới hạn kích thước ban đầu theo màn hình và có thanh cuộn dọc,
+hỗ trợ lăn chuột để xem toàn bộ nhóm chức năng. Nút Dừng và trạng thái luôn
+hiển thị ở dưới. Có thanh cuộn ngang khi cửa sổ hẹp; Shift + lăn chuột để
+cuộn ngang. Hộp instance mặc định 640×300 và cả hai cửa sổ đều co giãn được.
 
 **Cập nhật nút 5 lần (21/10/2026):** đã thử qua GUI trên Gia Cát Lượng,
 56 → 61 bằng đúng một lượt `5 lần` (`batch_actions=1, single_actions=0`).
@@ -865,3 +868,65 @@ khi bắt đầu; đổi lựa chọn không đổi đích của tác vụ đang
 vẫn chỉ có chu trình thử đã mô tả ở trên, chưa tự ghép các skill daily thành chuỗi.
 Các skill tự đọc và đóng bảng kết quả của mình; tự đóng popup chung của luồng
 Excel không can thiệp vào những bảng kết quả này.
+
+## test_multithreads — test đăng nhập Excel trên hai MuMu
+
+Chạy từ thư mục repo:
+
+```powershell
+.\.venv\Scripts\python.exe -B test_multithreads.py
+```
+
+Mặc định dùng MuMu index 0 và 1, mỗi instance chạy 5 tài khoản thành công.
+Kiểm tra cấu hình mà chưa chạy: thêm `--dry-run`. Có thể chọn hai index bằng
+`--instances 0 1` và số lượt bằng `--rounds 5`.
+
+Luồng cố định: mở instance/game → đóng thông báo → nhận hàng Excel trống và
+chưa xong ngày 1, ghi X → đổi/đăng nhập tài khoản → chọn server đã chơi và xác
+nhận vào sảnh chính → đóng game và xác nhận tiến trình đã thoát → ghi V và
+ngày 1 = 1 → mở lại game, đóng thông báo rồi tiếp tục. Lỗi 8011 ghi ERR và
+chuyển tài khoản, không tính vào số lượt thành công. Cuối bài test giữ hai
+instance mở tại màn hình đăng nhập. Bài này không vào Cỗ Máy Thời Gian.
+
+File dùng riêng cho test là `test_script.xlsx`, cùng thư mục repo, sao chép đúng
+10 tài khoản STT 1–10 từ `account.xlsx`, giữ các cột và định dạng như nguồn.
+Nút test đăng nhập Excel trong giao diện cũng dùng file test này; A/B/C vẫn
+dùng file tài khoản chính.
+
+Đóng Excel và dừng các tác vụ tool khác trước khi chạy. Ngay đầu mỗi lượt
+`test_multithreads`, script sao lưu file test vào `runtime/`, rồi tự xóa Status
+X/V/ERR và tất cả các ô ngày 1–15 của 10 tài khoản, cập nhật tổng về 0.
+Không thay TK/MK, không reset account.xlsx, không reset khi watchdog mở lại VM.
+`--dry-run` chỉ kiểm tra cấu hình, không xóa dữ liệu hay mở game. Có thể nhấn
+Ctrl+C để yêu cầu dừng; hàng chưa hoàn thành giữ X. Giữ timeout cho từng lệnh ADB.
+Nhật ký riêng từng lần chạy và bản tổng kết ở `runtime/test_multithreads-*`;
+nhật ký không chứa tài khoản/mật khẩu. Kết thúc thiếu lượt hoặc lỗi trả exit code 1.
+Các bài test khác về sau dùng script riêng, giữ nguyên luồng bài test này.
+
+### Quy ước mới ngày 07/11/2026: không delay và khôi phục instance treo
+
+Luồng đăng nhập, test và các skill chạy qua GUI không thêm thời gian nghỉ cố
+định giữa các bước. Sau mỗi thao tác phải quan sát ảnh mới để xác nhận trạng
+thái; không dùng sleep làm bằng chứng thao tác đã xong. `fixed_waits=True` chỉ
+dành cho kiểm thử mô phỏng đồng hồ, không bật trong script chạy thật.
+Quy ước cho người sửa mã nằm ở `AGENTS.md` và `runtime_policy.py`.
+
+`test_multithreads` và chu trình Excel A/B/C có bộ theo dõi màn hình riêng cho
+từng luồng. Sau 120 giây không có thay đổi ảnh đáng kể (bỏ qua nhiễu nhỏ), hoặc
+không lấy được ảnh, chỉ instance đó được tắt rồi mở lại. Trước khi đăng nhập
+lại, kiểm tra quyền sở hữu và nội dung hàng X trong Excel, dùng lại chính tài
+khoản đó. X là giữ chỗ, không phải xác nhận đã đăng nhập. V/ERR và các cột ngày
+đã ghi được giữ nguyên trong cùng lượt chạy. Một lượt test_multithreads mới
+reset file test một lần ở đầu theo quy ước trên. Nếu tiến trình Python bị tắt, không tự đoán chủ sở hữu
+của các hàng X cũ. Startup, shutdown và từng lệnh ADB vẫn có giới hạn thời gian.
+
+Thông báo nhận diện được có hướng dẫn nhấp vùng trống được đóng bằng cách
+chạm dải trống phía dưới (giữa ngang, 97,4% chiều cao), chụp ảnh mới rồi kiểm
+tra lại. Nếu vẫn xuất hiện thì tiếp tục xử lý; không bỏ cuộc sau 5 ảnh quá nhanh.
+Nếu thông báo không biến mất trong 120 giây, báo treo dù nền phía sau chuyển
+động. Những skill sở hữu bảng kết quả vẫn phải đọc thắng/thua/phần thưởng
+trước khi đóng. Ảnh liên tục chưa chứng minh game còn phản hồi: hoạt ảnh lớn
+có thể làm thay đổi ảnh dù nghiệp vụ không tiến triển; nhật ký phải được xem
+kèm trạng thái bước khi chẩn đoán trường hợp này.
+
+Khi báo cáo Excel phải kèm Status và ngày 1–15, phân biệt ô trống và số 1.

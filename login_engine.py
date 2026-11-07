@@ -12,6 +12,7 @@ from typing import Callable
 import cv2
 import numpy as np
 from screen_observer import capture_screen
+from screen_watchdog import ScreenStalledError
 
 ROOT = Path(__file__).resolve().parent
 ACCOUNT_FILE = ROOT / "account.txt"
@@ -236,7 +237,7 @@ class LoginEngine:
                  preview: Callable[[bytes], None] | None = None,
                  detector: Detector | None = None, timeout: float | None = 180,
                  clock: Callable = time.monotonic, sleeper: Callable | None = None,
-                 startup_delay: float = 6, metrics=None, fixed_waits: bool = True):
+                 startup_delay: float = 0, metrics=None, fixed_waits: bool = False):
         self.device = device
         self.metrics = metrics or (lambda **data: None)
         self.stop = stop or threading.Event()
@@ -373,7 +374,7 @@ class LoginEngine:
             while self.timeout is None or self.clock() - start < self.timeout:
                 try:
                     frame = self._observe()
-                except InterruptedError:
+                except (InterruptedError, ScreenStalledError):
                     raise
                 except Exception:
                     if self.timeout is not None:
@@ -467,7 +468,7 @@ class LoginEngine:
                             self.progress("Mở Đổi Tài Khoản để dùng tài khoản được chọn…")
                             self._tap(switch)
                             switched, switch_at = True, self.clock()
-                        elif self.clock() - switch_at > (18 if self.fixed_waits else 0):
+                        elif self.clock() - switch_at > 18:
                             if self.timeout is not None:
                                 return self._finish("unknown", "Không mở được biểu mẫu Đổi Tài Khoản.", True)
                             # Retry only when the same title-screen controls are visible.
@@ -495,7 +496,7 @@ class LoginEngine:
                             self.progress("Tích ô điều khoản theo quyền đã cho phép…")
                             self._tap(terms, dx=-168)
                             terms_tap_at = self.clock()
-                        elif self.clock() - terms_tap_at > (3 if self.fixed_waits else 0):
+                        elif self.clock() - terms_tap_at > 3:
                             if self.timeout is not None:
                                 return self._finish("unknown", "Ô điều khoản chưa được bật; đã dừng để tránh bấm nhầm.", True)
                             self._tap(terms, dx=-168)
@@ -527,6 +528,8 @@ class LoginEngine:
                     lobby_frames = 0
                 self._wait()
             return self._finish("timeout", "Hết thời gian chờ: game đang ở màn hình chưa nhận diện được. Đã dừng.", True)
+        except ScreenStalledError:
+            raise
         except InterruptedError:
             return self._finish("cancelled", "Đã dừng đăng nhập.")
         except Exception as exc:

@@ -8,7 +8,8 @@ import threading
 import time
 
 from account_excel import AccountWorkbook
-from emulator_instances import open_instance
+from emulator_instances import open_instance, restart_instance
+from screen_watchdog import ScreenWatchdog, ScreenStalledError
 from login_engine import AdbDevice, Detector, LoginEngine, PACKAGE
 from task_sessions import active_session
 import cv2
@@ -33,7 +34,7 @@ class MeasuredDetector(Detector):
 class ExcelLoginTest:
     def __init__(self, registry, provider, path, runner, writer, launcher, progress,
                  rounds=3, log_path=None, wait_forever=False, iteration_offset=0,
-                 fixed_waits=True, instance_name=None, target_stt=None, reuse_existing=False, allowed_stts=None):
+                 fixed_waits=False, instance_name=None, target_stt=None, reuse_existing=False, allowed_stts=None):
         self.registry, self.provider = registry, provider
         self.runner, self.writer, self.launcher = runner, writer, launcher
         self.external_progress = progress
@@ -130,7 +131,7 @@ class ExcelLoginTest:
                 elif (detector.find(frame, 'start_game', .94) and detector.find(frame, 'switch_account', .94)) or detector.find(frame, 'zingid', .95) or detector.find(frame, 'zingid_form', .94):
                     self.audit('login_ui_ready', session)
                     return
-            except InterruptedError:
+            except (InterruptedError, ScreenStalledError):
                 raise
             except Exception:
                 self.progress(session, 'Chưa lấy được màn hình; tiếp tục chờ, không timeout…')
@@ -141,6 +142,20 @@ class ExcelLoginTest:
         self.audit('excel_error', session, row=account.row, stt=account.row-1,
                    iteration=iteration, status='ERR', code=8011)
         self.progress(session, f'Excel STT {account.row-1}: ERR (8011); tìm tài khoản trống tiếp theo.')
+
+    def restart_stalled(self, instance, session):
+        """Restart this VM only, preserving session/account ownership in Python."""
+        session.control.checkpoint()
+        self.progress(session, 'Màn hình đứng 120 giây; tắt và mở lại riêng instance này…')
+        self.audit('watchdog_restart', session, row=getattr(session.current_account, 'row', None))
+        restart_instance(self.provider, instance, PACKAGE,
+            self.runner, self.launcher, session.control, lambda text: self.progress(session, text),
+            on_device=lambda adb, serial: self.registry.bind(session, adb, serial))
+
+    def make_device(self, session, monitor):
+        return AdbDevice(*session.connection, self.timed_runner(session), self.timed_writer(session), PACKAGE,
+            capture_options={'checkpoint': session.control.checkpoint, 'watchdog': monitor,
+                             'progress': lambda text: self.progress(session, text)})
 
     def worker(self, instance):
         session = self.registry.instance(self.provider, instance)
@@ -164,72 +179,85 @@ class ExcelLoginTest:
                     open_instance(self.provider, instance, PACKAGE, self.runner, self.launcher,
                         session.control, lambda text: self.progress(session, text), timeout=None if self.wait_forever else 180,
                         on_device=lambda adb, serial: self.registry.bind(session, adb, serial))
-                device = AdbDevice(*session.connection, self.timed_runner(session), self.timed_writer(session), PACKAGE,
-                    capture_options={'checkpoint': session.control.checkpoint,
-                                     'sleeper': lambda seconds: self.sleep(session, seconds),
-                                     'progress': lambda text: self.progress(session, text)})
-                while completed < self.rounds:
-                    iteration = completed + 1 + self.iteration_offset
-                    # The worker which reaches login UI first gets the first blank row.
-                    self.prepare(device, session)
-                    saved_at = time.perf_counter()
-                    if self.allowed_stts is not None:
-                        account = self.book.claim('A', session, allowed_stts=self.allowed_stts)
-                    else:
-                        account = self.book.claim('A', session, stt=self.target_stt) if self.target_stt is not None else self.book.claim('A', session)
-                    if account is None:
-                        self.audit('no_accounts', session, completed=completed)
-                        break
-                    self.audit('excel_reserved', session, row=account.row, stt=account.row-1,
-                               iteration=iteration, status='X', save_seconds=round(time.perf_counter()-saved_at, 4))
-                    self.progress(session, f'Excel STT {account.row-1}: X · lượt {iteration}/{self.iteration_offset + self.rounds}')
-                    recognition = MeasuredDetector()
-                    result = LoginEngine(device, detector=recognition, timeout=None if self.wait_forever else 240, stop=session.control.cancelled,
-                        clock=session.control.clock, sleeper=session.control.sleep, fixed_waits=self.fixed_waits,
-                        metrics=lambda **data: self.audit('observation_timing', session, **data),
-                        progress=lambda text: self.progress(session, text)).run(
-                            account.username, account.password, reset=False, launch_on_start=not self.reuse_existing,
-                            accept_terms=True, enter_game=True, prefer_played_server=True,
-                            on_invalid_credentials=lambda: self._invalid_account(account, session, iteration))
-                    self.audit('recognition_total', session, iteration=iteration,
-                               seconds=round(recognition.match_seconds, 4), calls=recognition.match_calls)
-                    if result.status == 'invalid_credentials':
-                        # ERR rows stay excluded; failed credentials do not consume a successful test round.
-                        self.target_stt = None
-                        continue
-                    if result.status != 'success':
-                        if result.status == 'cancelled':
-                            raise InterruptedError()
-                        error = result.status
-                        self.audit('login_failed', session, row=account.row, status=result.status)
-                        break
-                    self.audit('entered_game', session, row=account.row, iteration=iteration)
-                    self.progress(session, 'Thoát game và xác nhận đã đóng…')
-                    session.control.checkpoint()
-                    device.run('shell', 'am', 'force-stop', PACKAGE)
-                    # Confirm the process exited before recording completion.
-                    exit_deadline = None if self.wait_forever else session.control.clock() + 30
-                    while True:
-                        session.control.checkpoint()
-                        if exit_deadline is not None and session.control.clock() >= exit_deadline:
-                            raise TimeoutError('Chưa xác nhận được game đã thoát.')
-                        processes = device.run('shell', 'ps', '-A').decode('utf-8', 'replace')
-                        if not any(line.split() and (line.split()[-1] == PACKAGE or line.split()[-1].startswith(PACKAGE + ':')) for line in processes.splitlines()):
+                monitor = ScreenWatchdog(clock=session.control.clock)
+                device = self.make_device(session, monitor)
+                session.current_account = None
+                while True:
+                    try:
+                        iteration = completed + 1 + self.iteration_offset
+                        # The worker which reaches login UI first gets the first blank row.
+                        self.prepare(device, session)
+                        if completed >= self.rounds:
                             break
-                        self.sleep(session, 1)
-                    self.progress(session, 'Ghi V và ngày 1 vào Excel…')
-                    saved_at = time.perf_counter()
-                    self.book.complete(account, session)
-                    completed += 1
-                    self.audit('excel_completed', session, row=account.row, stt=account.row-1,
-                               iteration=iteration, status='V', day=1, value=1,
-                               save_seconds=round(time.perf_counter()-saved_at, 4))
-                    self.progress(session, f'Excel STT {account.row-1}: V · Ngày 1 = 1 · lượt {iteration}/{self.iteration_offset + self.rounds}')
-                    self.progress(session, 'Mở lại game và đóng thông báo…')
-                    device.launch(reset=False)
-                # Finish the last restart too. Keep V and day 1 for the user's review.
-                if not error:
-                    self.prepare(device, session)
+                        saved_at = time.perf_counter()
+                        account = session.current_account
+                        if account is None:
+                            if self.allowed_stts is not None:
+                                account = self.book.claim('A', session, allowed_stts=self.allowed_stts)
+                            else:
+                                account = self.book.claim('A', session, stt=self.target_stt) if self.target_stt is not None else self.book.claim('A', session)
+                            session.current_account = account
+                        else:
+                            account = self.book.validate_reservation(account, session)
+                            session.current_account = account
+                            if account is None:
+                                continue
+                        if account is None:
+                            self.audit('no_accounts', session, completed=completed)
+                            break
+                        self.audit('excel_reserved', session, row=account.row, stt=account.row-1,
+                                   iteration=iteration, status='X', save_seconds=round(time.perf_counter()-saved_at, 4))
+                        self.progress(session, f'Excel STT {account.row-1}: X · lượt {iteration}/{self.iteration_offset + self.rounds}')
+                        recognition = MeasuredDetector()
+                        result = LoginEngine(device, detector=recognition, timeout=None, stop=session.control.cancelled,
+                            clock=session.control.clock, sleeper=session.control.sleep, fixed_waits=self.fixed_waits,
+                            metrics=lambda **data: self.audit('observation_timing', session, **data),
+                            progress=lambda text: self.progress(session, text)).run(
+                                account.username, account.password, reset=False, launch_on_start=not self.reuse_existing,
+                                accept_terms=True, enter_game=True, prefer_played_server=True,
+                                on_invalid_credentials=lambda: self._invalid_account(account, session, iteration))
+                        self.audit('recognition_total', session, iteration=iteration,
+                                   seconds=round(recognition.match_seconds, 4), calls=recognition.match_calls)
+                        if result.status == 'invalid_credentials':
+                            # ERR rows stay excluded; failed credentials do not consume a successful test round.
+                            self.target_stt = None
+                            session.current_account = None
+                            continue
+                        if result.status != 'success':
+                            if result.status == 'cancelled':
+                                raise InterruptedError()
+                            error = result.status
+                            self.audit('login_failed', session, row=account.row, status=result.status)
+                            break
+                        self.audit('entered_game', session, row=account.row, iteration=iteration)
+                        self.progress(session, 'Thoát game và xác nhận đã đóng…')
+                        session.control.checkpoint()
+                        device.run('shell', 'am', 'force-stop', PACKAGE)
+                        # Confirm the process exited before recording completion.
+                        exit_deadline = None if self.wait_forever else session.control.clock() + 30
+                        while True:
+                            session.control.checkpoint()
+                            if exit_deadline is not None and session.control.clock() >= exit_deadline:
+                                raise TimeoutError('Chưa xác nhận được game đã thoát.')
+                            processes = device.run('shell', 'ps', '-A').decode('utf-8', 'replace')
+                            if not any(line.split() and (line.split()[-1] == PACKAGE or line.split()[-1].startswith(PACKAGE + ':')) for line in processes.splitlines()):
+                                break
+                            device.capture()
+                        self.progress(session, 'Ghi V và ngày 1 vào Excel…')
+                        saved_at = time.perf_counter()
+                        self.book.complete(account, session)
+                        completed += 1
+                        session.current_account = None
+                        self.audit('excel_completed', session, row=account.row, stt=account.row-1,
+                                   iteration=iteration, status='V', day=1, value=1,
+                                   save_seconds=round(time.perf_counter()-saved_at, 4))
+                        self.progress(session, f'Excel STT {account.row-1}: V · Ngày 1 = 1 · lượt {iteration}/{self.iteration_offset + self.rounds}')
+                        self.progress(session, 'Mở lại game và đóng thông báo…')
+                        device.launch(reset=False)
+                    except ScreenStalledError:
+                        self.restart_stalled(instance, session)
+                        monitor.reset()
+                        device = self.make_device(session, monitor)
         except InterruptedError:
             error = 'cancelled'
             self.audit('cancelled', session, completed=completed)
