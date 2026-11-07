@@ -54,3 +54,11 @@ class ScreenObserverTests(unittest.TestCase):
             capture_screen('adb', 'B', runner, sleeper=lambda _: None, max_dismissals=1)
         self.assertEqual(sum('tap' in c.args for c in runner.call_args_list), 1)
 
+
+class OwnedResultTests(unittest.TestCase):
+    def test_skill_can_observe_its_own_result_without_global_dismissal(self):
+        popup = frame(True)
+        runner = Mock(return_value=popup)
+        device = AdbDevice('adb', 'B', runner, None, capture_options={'dismiss_hints': False})
+        self.assertEqual(device.capture(), popup)
+        self.assertEqual(runner.call_count, 1)

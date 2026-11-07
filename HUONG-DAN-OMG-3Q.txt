@@ -13,6 +13,18 @@ Tool không ghi số 1 cho tài khoản lỗi. Dòng tổng luôn ở dưới da
 Giao diện đã bỏ nhập ADB/gói game và kịch bản chạm thủ công. Có thể kéo đổi kích thước cả hai cửa sổ.
 Đọc README.md để biết chi tiết các chế độ test và phạm vi tính năng hiện tại.
 
+NHIỆM VỤ HẰNG NGÀY Ở SẢNH CHÍNH
+
+1. Vào sảnh chính của OMG 3Q, ở ngoài Cỗ Máy Thời Gian.
+2. Trong nhóm Sảnh chính · Nhiệm vụ hằng ngày, bấm Mở nhiệm vụ hằng ngày.
+3. Tool nhận diện icon cuộn giấy ở góc trên bên phải và mở bảng Nhiệm vụ.
+
+- Nếu đang ở tab Thành tựu, tool chuyển về tab Nhiệm vụ; đã mở đúng thì giữ nguyên.
+- Bước này chỉ mở bảng, chưa thực hiện nhiệm vụ hoặc bấm nhận thưởng.
+- Các bước thực hiện từng nhiệm vụ sẽ được bổ sung theo hướng dẫn sau.
+- Có thể dùng nút Dừng chung. Nếu không ở sảnh chính/bảng nhiệm vụ đã biết, tool dừng.
+- Ảnh và kết quả từng lượt nằm trong runtime/daily_tasks/.
+
 PHÓ BẢN CỖ MÁY THỜI GIAN
 
 1. Vào game bằng nhân vật muốn chạy phó bản.

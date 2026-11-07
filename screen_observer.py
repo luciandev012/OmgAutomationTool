@@ -34,11 +34,11 @@ def has_dismiss_hint(png):
 
 
 def capture_screen(adb, serial, runner, *, sleeper=time.sleep, max_dismissals=5,
-                   checkpoint=lambda: None, progress=lambda message: None):
+                   checkpoint=lambda: None, progress=lambda message: None, dismiss_hints=True):
     for attempt in range(max_dismissals + 1):
         checkpoint()
         png = runner(adb, '-s', serial, 'exec-out', 'screencap', '-p', timeout=30)
-        if not has_dismiss_hint(png):
+        if not dismiss_hints or not has_dismiss_hint(png):
             return png
         if attempt == max_dismissals:
             raise ValueError('Bảng có hướng dẫn nhấn vùng trống chưa đóng sau khi bấm giữa màn hình.')

@@ -4,6 +4,8 @@ import unittest
 from contextlib import ExitStack
 from unittest.mock import Mock, patch
 
+from dungeon_engine import DungeonResult
+
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / "omg3q_tool.py"
 spec = importlib.util.spec_from_file_location("omg3q_tool", SOURCE)
@@ -15,13 +17,14 @@ class ToolTests(unittest.TestCase):
     def test_gui_builds_excel_scripts_without_old_credentials_widgets(self):
         app=tool.App.__new__(tool.App)
         app.root=Mock();app.providers=[]
-        for name in ('provider_name','serial','excel_path','dungeon_limit','status'):
+        for name in ('provider_name','serial','excel_path','dungeon_limit','status','dungeon_spam','dungeon_spam_limit','advance_scope','advance_mode','advance_target','level_scope','level_mode','level_target','treasure_scope','treasure_mode','treasure_target'):
             setattr(app,name,Mock())
+        app.evolution = {kind: {key: Mock() for key in ("scope", "mode", "target", "lv")} for kind in tool.KINDS}
         app._scan_catalog=Mock()
         app.run_excel_script=Mock()
         with ExitStack() as stack:
             buttons=stack.enter_context(patch.object(tool.ttk,'Button'))
-            for name in ('Frame','Label','Combobox','Entry','LabelFrame','Spinbox'):
+            for name in ('Frame','Label','Combobox','Entry','LabelFrame','Spinbox','Checkbutton'):
                 stack.enter_context(patch.object(tool.ttk,name))
             for name in ('StringVar','Canvas','Listbox'):
                 stack.enter_context(patch.object(tool.tk,name))
@@ -115,6 +118,68 @@ class ToolTests(unittest.TestCase):
         with patch.object(tool, "run_adb", return_value=focus):
             self.assertEqual(tool.foreground_package("adb", "127.0.0.1:16384"),
                              "com.example.omg3q")
+
+    def dungeon_app(self, spam=True, spam_limit="100"):
+        app = Mock(spec=tool.App)
+        app.busy = False
+        for name, value in (("dungeon_limit", "0"), ("dungeon_spam", spam),
+                            ("dungeon_spam_limit", spam_limit),
+                            ("serial", "127.0.0.1:16384"), ("package", "com.gs2.omg")):
+            variable = Mock()
+            variable.get.return_value = value
+            setattr(app, name, variable)
+        app.adb = "adb"
+        app.sessions = tool.SessionRegistry()
+        app.stop_event, app.events, app.status, app.root = Mock(), Mock(), Mock(), Mock()
+        return app
+
+    def test_dungeon_gui_passes_spam_budget_to_worker(self):
+        app = self.dungeon_app(spam_limit="23")
+        with patch.object(tool, "DungeonDetector"), patch.object(tool, "connect"), \
+                patch.object(tool, "foreground_package", return_value="com.gs2.omg"), \
+                patch.object(tool, "AdbDevice"), patch.object(tool, "DungeonEngine") as engine:
+            tool.App.run_dungeon(app)
+            work = app._worker.call_args.args[0]
+            work()
+        engine.return_value.run.assert_called_once_with(max_wins=0, spam=True, spam_limit=23)
+
+    def test_invalid_spam_budget_does_not_start_worker(self):
+        for value in ("0", "-1", "", "one", "1.5"):
+            app = self.dungeon_app(spam_limit=value)
+            with patch.object(tool, "DungeonDetector"), patch.object(tool.messagebox, "showinfo") as notice:
+                tool.App.run_dungeon(app)
+            app._worker.assert_not_called()
+            notice.assert_called_once()
+
+    def test_disabled_spam_ignores_an_unused_invalid_budget(self):
+        app = self.dungeon_app(spam=False, spam_limit="invalid")
+        with patch.object(tool, "DungeonDetector"), patch.object(tool, "connect"), \
+                patch.object(tool, "foreground_package", return_value="com.gs2.omg"), \
+                patch.object(tool, "AdbDevice"), patch.object(tool, "DungeonEngine") as engine:
+            tool.App.run_dungeon(app)
+            app._worker.call_args.args[0]()
+        engine.return_value.run.assert_called_once_with(max_wins=0, spam=False, spam_limit=100)
+
+    def test_spam_exhaustion_notifies_and_only_restarts_after_yes(self):
+        for answer in (False, True):
+            app = self.dungeon_app()
+            result = DungeonResult("spam_limit", "Đã hết 100 lần spam.", retries=100, stage_retries=100)
+            with patch.object(tool.messagebox, "askyesno", return_value=answer) as question:
+                tool.App._dungeon_complete(app, result)
+            question.assert_called_once()
+            app.run_dungeon.assert_not_called()
+            self.assertEqual(app.last_dungeon_result, result)
+            if answer:
+                app.root.after_idle.assert_called_once_with(app.run_dungeon)
+            else:
+                app.root.after_idle.assert_not_called()
+
+    def test_normal_defeat_does_not_offer_a_spam_turn(self):
+        app = self.dungeon_app(spam=False)
+        with patch.object(tool.messagebox, "askyesno") as question:
+            tool.App._dungeon_complete(app, DungeonResult("defeat", "Đã thua."))
+        question.assert_not_called()
+        app.root.after_idle.assert_not_called()
 
 
 if __name__ == "__main__":
