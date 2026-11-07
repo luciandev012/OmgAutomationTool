@@ -79,6 +79,27 @@ Tool đọc số lượng tài khoản theo danh sách hiện có, tự chuyển
 và cập nhật công thức khi thêm tài khoản; không cố định số hàng. Tài khoản và mật
 khẩu phải được lưu dưới dạng văn bản để giữ nguyên số 0 đầu và ký tự đặc biệt.
 
+### Tạo file Excel và nhập tài khoản trên máy mới
+
+1. Chép `account.example.xlsx` thành `account.xlsx` trong thư mục tool.
+   Nếu đã có file tài khoản thật thì giữ file đó, không chép đè.
+2. Mở file bằng Excel, dùng trang đầu tiên và giữ nguyên hàng tiêu đề:
+   `STT | TK | MK | Status | 1 … 15 | Hoàn Thành`.
+3. Hai cột B (TK) và C (MK) đã được đặt dạng **Text**. Nhập tên đăng nhập
+   và mật khẩu từ hàng 2; không chuyển sang Number để tránh mất số 0 đầu.
+4. Giữ Status và các cột ngày 1–15 trống khi bắt đầu. Không ghi TK/MK vào
+   các cột ngày; giữ công thức ở cột Hoàn Thành và dòng Tổng đã hoàn thành.
+5. Mẫu chính có sẵn 75 hàng đánh số STT. Nếu dùng ít hơn, xóa toàn bộ các
+   hàng tài khoản chưa dùng để dòng tổng nằm ngay dưới tài khoản cuối.
+   Khi thêm tài khoản, chèn hàng phía trên dòng tổng, điền STT/TK/MK.
+6. Lưu định dạng `.xlsx`, đóng Excel rồi chọn file trong tool để chạy A/B/C.
+7. Để test, chép `test_script.example.xlsx` thành `test_script.xlsx`, rồi
+   nhập đúng 10 tài khoản STT 1–10 từ file chính. `test_multithreads.py` sẽ
+   tự sao lưu và reset Status/ngày ở file test trước mỗi lượt chạy.
+
+Không commit/push hai file sau khi đã nhập TK/MK; chỉ hai mẫu `.example.xlsx`
+trống được chia sẻ trong repo.
+
 Mở và kết nối các instance, chọn tệp rồi bấm một trong ba nút:
 
 - **Script A**: tài khoản chưa hoàn thành ngày 1; thành công ghi `1` ở ngày 1.
@@ -789,13 +810,16 @@ quét 50 lần; nhận 9 mảnh Điển Vi, số mảnh tăng 537 → 546. Đã 
 kết quả và trở lại Mảnh Tướng. Ảnh và báo cáo nằm trong
 `runtime/daily_tasks/<lượt chạy>/` như các chức năng nhiệm vụ ngày khác.
 
-## Tệp riêng trên máy
+## Dữ liệu tài khoản và tệp cục bộ
 
-- `account.xlsx`: TK/MK, Status X/V/ERR, các ngày 1–15 và tổng Hoàn Thành.
+- `account.xlsx`: danh sách chính 75 tài khoản, TK/MK, Status X/V/ERR, ngày 1–15 và tổng Hoàn Thành.
+- `test_script.xlsx`: đúng 10 tài khoản STT 1–10 dùng cho test.
 - `runtime/`: nhật ký test, bản Excel sao lưu và ảnh chẩn đoán.
 - `.venv/`: môi trường Python cục bộ.
 
-Các tệp tài khoản, mật khẩu, môi trường và dữ liệu chạy thử được loại khỏi Git.
+Git chỉ chứa hai file mẫu trống `account.example.xlsx` (75 hàng) và
+`test_script.example.xlsx` (10 hàng), không chứa TK/MK. File tài khoản thật,
+file mật khẩu riêng, môi trường và dữ liệu trong `runtime/` được loại khỏi Git.
 Mật khẩu được chuyển tới ADB qua stdin, không xuất hiện trong tham số tiến trình Windows.
 
 ## Kiểm thử

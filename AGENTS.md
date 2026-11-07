@@ -18,7 +18,9 @@
   only `test_script.xlsx` containing STT 1-10. Back it up and clear X/V/ERR and
   days 1-15 ONCE before starting workers on each new run. Never reset during
   watchdog recovery. GUI login tests also read this dedicated file. Normal
-  A/B/C runs still use account.xlsx. Both credential workbooks stay Git-ignored.
+  A/B/C runs still use account.xlsx. Only empty account.example.xlsx and
+  test_script.example.xlsx templates belong in Git. The populated account.xlsx
+  and test_script.xlsx files and runtime backups must remain local and ignored.
 - A recognized "nhấp vào khoảng trống" overlay must be tapped in the blank
   bottom strip and captured again until it disappears. Do not proceed using
   the pre-tap screenshot or stop after an arbitrary five fast attempts.

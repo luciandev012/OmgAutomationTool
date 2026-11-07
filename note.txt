@@ -89,3 +89,9 @@ CẬP NHẬT 07/11/2026 — tách Excel test và tự reset đầu lượt
   cập nhật tổng rồi mới khởi động worker. Không reset lại khi VM được watchdog phục hồi.
 - Chặn reset filename khác test_script.xlsx và danh sách khác đúng 10 STT 1–10.
 - File test chứa TK/MK nên được loại khỏi Git. --dry-run không reset, không mở game.
+
+CẬP NHẬT 07/11/2026 — chỉ chia sẻ mẫu Excel trống
+- Đưa account.example.xlsx (75 hàng) và test_script.example.xlsx (10 hàng) vào Git.
+- Hai mẫu tạo mới từ đầu, không có TK/MK hoặc dữ liệu tài khoản ẩn trong shared strings.
+- account.xlsx, test_script.xlsx chứa dữ liệu thật tiếp tục ở máy và được Git bỏ qua.
+- README có hướng dẫn chép mẫu, nhập TK/MK dạng Text và chuẩn bị 10 tài khoản test.
